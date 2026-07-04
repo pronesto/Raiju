@@ -9,11 +9,6 @@
 #include <numeric>
 #include <algorithm>
 
-// Standard helper to calculate GCD
-internal inline int computeGCD(int a, int b) {
-    return std::gcd(a, b);
-}
-
 /**
  * @class AbstractValue
  * @brief Represents an element in the Finite-Set / Strided-Interval abstract domain.
