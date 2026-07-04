@@ -14,7 +14,7 @@ include_directories(src)
 
 # Define the source files for the analyzer core
 set(ANALYZER_SOURCES
-    src/AbstractValue.cpp
+  # Thus far, we don't have implementation (cpp) files
 )
 
 # Executable for the main static analyzer tool
