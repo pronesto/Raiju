@@ -110,82 +110,100 @@ bool AddConstraint::eval(AbstractState& A) {
 
 
 // --- IntersectionConstraint (v0 = v1 intersection [low, up]) ---
-IntersectionConstraint::IntersectionConstraint(std::string dest, std::string src, 
-                                               IntersectionBound low, IntersectionBound up)
-    : Constraint(std::move(dest)), operand(std::move(src)), 
-      lower_bound(std::move(low)), upper_bound(std::move(up)) {}
+IntersectionConstraint::IntersectionConstraint(
+    std::string dest,
+    std::string src,
+    IntersectionBound low,
+    IntersectionBound up)
+    : Constraint(std::move(dest)),
+      operand(std::move(src)),
+      lower_bound(std::move(low)),
+      upper_bound(std::move(up))
+{}
 
-AnalyzedValue::Bound IntersectionConstraint::resolveBound(const IntersectionBound& b, const AbstractState& A) const {
-    if (std::holds_alternative<AnalyzedValue::Bound>(b)) {
+AnalyzedValue::Bound
+IntersectionConstraint::resolveBound(const IntersectionBound& b,
+                                     const bool isLower,
+                                     const AbstractState&) const {
+
+    if (std::holds_alternative<AnalyzedValue::Bound>(b))
         return std::get<AnalyzedValue::Bound>(b);
-    }
-    
-    // Resolve Future references dynamically from current state table
-    const Future& fut = std::get<Future>(b);
-    auto it = A.find(fut.target_variable);
-    if (it == A.end()) {
-        // Target not initialized yet, fallback safely
-        return AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0};
-    }
 
-    const AnalyzedValue& target_val = it->second;
-    AnalyzedValue::Bound resolved;
-    
-    // Futures look at corresponding edge limits depending on whether it's an upper or lower context.
-    // For simplicity, let's assume it checks the target variable's constant values.
-    if (target_val.getKind() == AnalyzedValue::Kind::Set && !target_val.getValues().empty()) {
-        resolved.type = AnalyzedValue::Bound::Type::Constant;
-        // If resolving for lower vs upper, take min or max. Let's adapt with an offset.
-        resolved.value = target_val.getValues().front() + fut.offset;
-    } else {
-        // If it's an interval, extract bounds safely
-        resolved = target_val.getLower(); // fallback structure
-        if (resolved.type == AnalyzedValue::Bound::Type::Constant) {
-            resolved.value += fut.offset;
-        }
-    }
-    return resolved;
+    // Growth phase:
+    // ignore symbolic references
+    AnalyzedValue::Bound result;
+
+    if (isLower)
+        result.type = AnalyzedValue::Bound::Type::MinusInfinity;
+    else
+        result.type = AnalyzedValue::Bound::Type::PlusInfinity;
+
+    result.value = 0;
+    return result;
 }
 
 bool IntersectionConstraint::eval(AbstractState& A) {
-    AnalyzedValue old_val = A[variable_name];
-    const AnalyzedValue& src_val = A[operand];
-    
-    AnalyzedValue::Bound resolved_low = resolveBound(lower_bound, A);
-    AnalyzedValue::Bound resolved_up = resolveBound(upper_bound, A);
 
-    AnalyzedValue result; // Starts empty
+    AnalyzedValue oldValue = A[variable_name];
+    const AnalyzedValue& src = A[operand];
 
-    // Slice or narrow down values based on incoming rules
-    if (src_val.getKind() == AnalyzedValue::Kind::Set) {
-        for (int v : src_val.getValues()) {
-            bool low_ok = (resolved_low.type == AnalyzedValue::Bound::Type::MinusInfinity) || (v >= resolved_low.value);
-            bool up_ok = (resolved_up.type == AnalyzedValue::Bound::Type::PlusInfinity) || (v <= resolved_up.value);
-            if (low_ok && up_ok) {
+    // Bottom stays bottom.
+    if (src.getKind() == AnalyzedValue::Kind::Set &&
+        src.getValues().empty()) {
+        return false;
+    }
+
+    auto low = resolveBound(lower_bound, true, A);
+    auto up  = resolveBound(upper_bound, false, A);
+
+    AnalyzedValue result;
+
+    // Source is a finite set.
+    if (src.getKind() == AnalyzedValue::Kind::Set) {
+
+        for (int v : src.getValues()) {
+            bool keep = true;
+            if (low.type == AnalyzedValue::Bound::Type::Constant)
+                keep &= (v >= low.value);
+            if (up.type == AnalyzedValue::Bound::Type::Constant)
+                keep &= (v <= up.value);
+            if (keep)
                 result.addConstant(v);
-            }
         }
-    } else {
-        // Structural Interval intersection
-        // Lower limit narrowing
-        AnalyzedValue::Bound final_low = src_val.getLower();
-        if (resolved_low.type == AnalyzedValue::Bound::Type::Constant) {
-            if (final_low.type == AnalyzedValue::Bound::Type::MinusInfinity || final_low.value < resolved_low.value) {
-                final_low = resolved_low;
-            }
+    }
+
+    // Source is already an interval.
+    else {
+        auto lower = src.getLower();
+        auto upper = src.getUpper();
+
+        // max(lower, low)
+        if (low.type == AnalyzedValue::Bound::Type::Constant) {
+            if (lower.type == AnalyzedValue::Bound::Type::MinusInfinity)
+                lower = low;
+            else if (lower.type == AnalyzedValue::Bound::Type::Constant)
+                lower.value = std::max(lower.value, low.value);
         }
-        
-        // Upper limit narrowing
-        AnalyzedValue::Bound final_up = src_val.getUpper();
-        if (resolved_up.type == AnalyzedValue::Bound::Type::Constant) {
-            if (final_up.type == AnalyzedValue::Bound::Type::PlusInfinity || final_up.value > resolved_up.value) {
-                final_up = resolved_up;
-            }
+
+        // min(upper, up)
+        if (up.type == AnalyzedValue::Bound::Type::Constant) {
+            if (upper.type == AnalyzedValue::Bound::Type::PlusInfinity)
+                upper = up;
+            else if (upper.type == AnalyzedValue::Bound::Type::Constant)
+                upper.value = std::min(upper.value, up.value);
         }
-        
-        result.setAsInterval(final_low, final_up, src_val.getStride());
+
+        // Empty interval?
+        if (lower.type == AnalyzedValue::Bound::Type::Constant &&
+            upper.type == AnalyzedValue::Bound::Type::Constant &&
+            lower.value > upper.value) {
+            // Leave result as bottom.
+        }
+        else {
+            result.setAsInterval(lower, upper, src.getStride());
+        }
     }
 
     A[variable_name] = result;
-    return old_val != result;
+    return oldValue != result;
 }

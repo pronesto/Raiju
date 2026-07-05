@@ -159,3 +159,87 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math", "[constraint
         REQUIRE(result.getStride() == 1);
     }
 }
+
+TEST_CASE("Intersection with constant upper bound", "[constraints][intersect]") {
+
+    AbstractState state;
+
+    AnalyzedValue v;
+    v.addConstant(1);
+    v.addConstant(5);
+    v.addConstant(10);
+
+    state["x"] = v;
+
+    AnalyzedValue::Bound minusInf;
+    minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+
+    AnalyzedValue::Bound five;
+    five.type = AnalyzedValue::Bound::Type::Constant;
+    five.value = 5;
+
+    IntersectionConstraint C("y","x",minusInf,five);
+
+    REQUIRE(C.eval(state));
+
+    REQUIRE(state["y"].getKind()==AnalyzedValue::Kind::Set);
+
+    REQUIRE(state["y"].getValues()==std::vector<int>{1,5});
+}
+
+TEST_CASE("Intersection narrows interval", "[constraints][intersect]") {
+
+    AbstractState state;
+
+    AnalyzedValue x;
+
+    AnalyzedValue::Bound low;
+    low.type=AnalyzedValue::Bound::Type::Constant;
+    low.value=0;
+
+    AnalyzedValue::Bound up;
+    up.type=AnalyzedValue::Bound::Type::Constant;
+    up.value=100;
+
+    x.setAsInterval(low,up,1);
+
+    state["x"]=x;
+
+    AnalyzedValue::Bound ten;
+    ten.type=AnalyzedValue::Bound::Type::Constant;
+    ten.value=10;
+
+    AnalyzedValue::Bound twenty;
+    twenty.type=AnalyzedValue::Bound::Type::Constant;
+    twenty.value=20;
+
+    IntersectionConstraint C("y","x",ten,twenty);
+
+    REQUIRE(C.eval(state));
+
+    REQUIRE(state["y"].getLower().value==10);
+    REQUIRE(state["y"].getUpper().value==20);
+}
+
+TEST_CASE("Growth phase ignores futures", "[constraints][intersect]") {
+
+    AbstractState state;
+
+    AnalyzedValue x;
+    x.addConstant(1);
+    x.addConstant(5);
+    x.addConstant(10);
+
+    state["x"]=x;
+
+    IntersectionConstraint::Future F{"y", -1};
+
+    AnalyzedValue::Bound minusInf;
+    minusInf.type=AnalyzedValue::Bound::Type::MinusInfinity;
+
+    IntersectionConstraint C("z", "x", minusInf, F);
+
+    REQUIRE(C.eval(state));
+
+    REQUIRE(state["z"]==state["x"]);
+}

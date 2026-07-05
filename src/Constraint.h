@@ -103,7 +103,8 @@ private:
     IntersectionBound upper_bound;
 
     // Helper to resolve a variant bound into a concrete AnalyzedValue::Bound at runtime
-    AnalyzedValue::Bound resolveBound(const IntersectionBound& b, const AbstractState& A) const;
+    AnalyzedValue::Bound resolveBound(const IntersectionBound& b, const bool isLower,
+        const AbstractState& A) const;
 
 public:
     IntersectionConstraint(std::string dest, std::string src,
