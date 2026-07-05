@@ -20,6 +20,12 @@
 template <unsigned N>
 class AbstractValue {
 public:
+
+    /**
+     * @brief Maximum number of distinct constants tracked exactly by this domain.
+     */
+    static constexpr unsigned MaxConstants = N;
+
     /**
      * @enum Kind
      * @brief Represents the current underlying representation of the abstract value.
@@ -85,6 +91,72 @@ public:
      * @return Kind The structural layout (Set or StridedInterval).
      */
     Kind getKind() const { return kind; }
+
+        /**
+     * @brief Returns the set of tracked constants.
+     *
+     * This method is only meaningful when getKind() == Kind::Set.
+     *
+     * @return A constant reference to the internal vector of values.
+     */
+    const std::vector<int>& getValues() const {
+        return values;
+    }
+
+    /**
+     * @brief Returns the lower bound of a strided interval.
+     *
+     * This method is only meaningful when getKind() ==
+     * Kind::StridedInterval.
+     *
+     * @return A constant reference to the lower bound.
+     */
+    const Bound& getLower() const {
+        return lower;
+    }
+
+    /**
+     * @brief Returns the upper bound of a strided interval.
+     *
+     * This method is only meaningful when getKind() ==
+     * Kind::StridedInterval.
+     *
+     * @return A constant reference to the upper bound.
+     */
+    const Bound& getUpper() const {
+        return upper;
+    }
+
+    /**
+     * @brief Returns the stride of a strided interval.
+     *
+     * This method is only meaningful when getKind() ==
+     * Kind::StridedInterval.
+     *
+     * @return The interval stride.
+     */
+    unsigned getStride() const {
+        return stride;
+    }
+
+    /**
+     * @brief Converts this abstract value into a strided interval.
+     *
+     * The current set representation, if any, is discarded.
+     *
+     * @param lowerBound Lower bound of the interval.
+     * @param upperBound Upper bound of the interval.
+     * @param intervalStride Stride of the interval (must be at least one).
+     */
+    void setAsInterval(const Bound& lowerBound,
+                       const Bound& upperBound,
+                       unsigned intervalStride = 1) {
+        kind = Kind::StridedInterval;
+        lower = lowerBound;
+        upper = upperBound;
+        stride = std::max(1u, intervalStride);
+        values.clear();
+    }
 
     /**
      * @brief Equality operator for two Bounds.
