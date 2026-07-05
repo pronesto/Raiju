@@ -283,3 +283,7 @@ void AbstractValue<N>::join(const AbstractValue& other) {
         }
     }
 }
+
+// Let's work with at most four constants per abstract state. If later on we
+// want more precision, then change this definition and recompile.
+using AnalyzedValue = AbstractValue<4>;
