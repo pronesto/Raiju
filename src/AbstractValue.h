@@ -49,11 +49,11 @@ public:
     };
 
 private:
-    Kind kind;                   /**< Keeps track of whether this is a Set or a StridedInterval. */
-    std::vector<int> values;     /**< Stores exact constants when kind == Kind::Set. Unused otherwise. */
+    Kind kind;                   /**< A Set or a StridedInterval. */
+    std::vector<int> values;     /**< Constants when kind == Kind::Set. Unused otherwise. */
     Bound lower;                 /**< Lower bound used when kind == Kind::StridedInterval. */
     Bound upper;                 /**< Upper bound used when kind == Kind::StridedInterval. */
-    unsigned stride;             /**< Stride value ($s \ge 1$) used when kind == Kind::StridedInterval. */
+    unsigned stride;             /**< Stride value ($s \ge 1$) for strided intervals. */
 
 public:
     /**
@@ -67,7 +67,7 @@ public:
     }
 
     /**
-     * @brief Computes the least upper bound (join) of this value and another abstract value.
+     * @brief Computes the least upper bound (join) of this value and another value.
      * * If both are sets and the union's size $\le N$, the result is a finite set. 
      * Otherwise, it collapses into or updates a strided interval.
      * * @param other The abstract value to join with.
@@ -75,7 +75,7 @@ public:
     void join(const AbstractValue& other);
 
     /**
-     * @brief Forcefully adds a single literal constant into the abstract value representation.
+     * @brief Adds a single literal constant into the abstract value representation.
      * * @param val The integer constant to add.
      */
     void addConstant(int val);
@@ -85,6 +85,55 @@ public:
      * @return Kind The structural layout (Set or StridedInterval).
      */
     Kind getKind() const { return kind; }
+
+    /**
+     * @brief Equality operator for two Bounds.
+     */
+    friend bool operator==(const Bound& lhs, const Bound& rhs) {
+        if (lhs.type != rhs.type) return false;
+        if (lhs.type == Bound::Type::Constant) {
+            return lhs.value == rhs.value;
+        }
+        return true; // Both are either PlusInfinity or MinusInfinity
+    }
+
+    /**
+     * @brief Inequality operator for two Bounds.
+     */
+    friend bool operator!=(const Bound& lhs, const Bound& rhs) {
+        return !(lhs == rhs);
+    }
+
+    /**
+     * @brief Checks if two AbstractValues are completely identical in the lattice.
+     * @param other The abstract value to compare against.
+     * @return true if both states share the exact same abstract representation, false otherwise.
+     */
+    bool operator==(const AbstractValue& other) const {
+        // 1. Structural kind must match
+        if (this->kind != other.kind) {
+            return false;
+        }
+
+        // 2. Element-wise comparison depending on the internal layout
+        if (this->kind == Kind::Set) {
+            // Since elements are kept sorted and unique, a standard vector
+            // comparison works in O(k) time where k <= N.
+            return this->values == other.values;
+        } else {
+            // Strided Interval parameters must be exactly identical
+            return (this->stride == other.stride) &&
+                   (this->lower == other.lower) &&
+                   (this->upper == other.upper);
+        }
+    }
+
+    /**
+     * @brief Inequality operator for AbstractValue.
+     */
+    bool operator!=(const AbstractValue& other) const {
+        return !(*this == other);
+    }
 };
 
 template <unsigned N>
