@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <set>
 #include <vector>
 #include <numeric>
 #include <algorithm>
@@ -17,6 +18,9 @@
  * it collapses into a strided interval representation to ensure a bounded abstract state.
  * * @tparam N The compile-time constant determining the maximum size of exact sets.
  */
+// Create an abstract class for abstract value so that we have two concrete classes:
+// IntValue
+// BoolValue
 template <unsigned N>
 class AbstractValue {
 public:
@@ -56,7 +60,7 @@ public:
 
 private:
     Kind kind;                   /**< A Set or a StridedInterval. */
-    std::vector<int> values;     /**< Constants when kind == Kind::Set. Unused otherwise. */
+    std::set<int> values;     /**< Constants when kind == Kind::Set. Unused otherwise. */
     Bound lower;                 /**< Lower bound used when kind == Kind::StridedInterval. */
     Bound upper;                 /**< Upper bound used when kind == Kind::StridedInterval. */
     unsigned stride;             /**< Stride value ($s \ge 1$) for strided intervals. */
@@ -85,6 +89,8 @@ public:
      * * @param val The integer constant to add.
      */
     void addConstant(int val);
+
+    void addConstants(std::vector<int> &vals);
     
     /**
      * @brief Get the current structural representation kind.
@@ -97,9 +103,9 @@ public:
      *
      * This method is only meaningful when getKind() == Kind::Set.
      *
-     * @return A constant reference to the internal vector of values.
+     * @return A constant reference to the internal set of values.
      */
-    const std::vector<int>& getValues() const {
+    const std::set<int>& getValues() const {
         return values;
     }
 
@@ -211,40 +217,33 @@ public:
 template <unsigned N>
 void AbstractValue<N>::addConstant(int val) {
     if (kind == Kind::Set) {
-        // Find the insertion position to maintain sorted order
-        auto it = std::lower_bound(values.begin(), values.end(), val);
-
-        // If the constant is already present, do nothing (exact match)
-        if (it != values.end() && *it == val) {
-            return;
-        }
-
-        // Insert the new unique constant
-        values.insert(it, val);
+        values.emplace(val);
 
         // Check if we have exceeded the exact tracking capacity N
         if (values.size() > N) {
             // Collapse the representation into a Strided Interval
             kind = Kind::StridedInterval;
 
-            int base = values.front();
+            int base = *values.begin();
             int current_gcd = 0;
-            for (size_t i = 1; i < values.size(); ++i) {
-                current_gcd = std::gcd(current_gcd, values[i] - base);
+            for (int v : values) {
+                if (v == base) {
+                    continue;
+                }
+                current_gcd = std::gcd(current_gcd, v - base);
             }
 
             // Assign bounds based on the captured set bounds
             lower.type = Bound::Type::Constant;
-            lower.value = values.front();
+            lower.value = *values.begin();
 
             upper.type = Bound::Type::Constant;
-            upper.value = values.back();
+            upper.value = *values.rbegin();
 
             stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
 
             // Free the memory since vector is no longer used
             values.clear();
-            values.shrink_to_fit();
         }
     } else {
         // If it's already a Strided Interval, we apply the widening logic
@@ -265,16 +264,69 @@ void AbstractValue<N>::addConstant(int val) {
 }
 
 template <unsigned N>
+void AbstractValue<N>::addConstants(std::vector<int> &vals) {
+    if (kind == Kind::Set) {
+        for (int val : vals) {
+            values.emplace(val);
+        }
+
+        // Check if we have exceeded the exact tracking capacity N
+        if (values.size() > N) {
+            // Collapse the representation into a Strided Interval
+            kind = Kind::StridedInterval;
+
+            int base = *values.begin();
+            int current_gcd = 0;
+            for (int v : values) {
+                if (v == base) {
+                    continue;
+                }
+                current_gcd = std::gcd(current_gcd, v - base);
+            }
+
+            // Assign bounds based on the captured set bounds
+            lower.type = Bound::Type::Constant;
+            lower.value = *values.begin();
+
+            upper.type = Bound::Type::Constant;
+            upper.value = *values.rbegin();
+
+            stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
+
+            // Free the memory since vector is no longer used
+            values.clear();
+        }
+    } else {
+        for (int val : vals) {
+            // If it's already a Strided Interval, we apply the widening logic
+            // to adapt the bounds and recalculate the stride based on the new point.
+            if (val < lower.value && lower.type == Bound::Type::Constant) {
+                // Case 2: Constant is smaller than the minimum
+                lower.type = Bound::Type::MinusInfinity;
+                stride = std::gcd(stride, static_cast<unsigned>(std::abs(upper.value - val)));
+            } else if (val > upper.value && upper.type == Bound::Type::Constant) {
+                // Case 3: Constant is larger than the maximum
+                upper.type = Bound::Type::PlusInfinity;
+                stride = std::gcd(stride, static_cast<unsigned>(std::abs(val - lower.value)));
+            } else {
+                // Case 1: Inside the current hull bounds
+                stride = std::gcd(stride, static_cast<unsigned>(std::abs(val - lower.value)));
+            }
+        }
+    }
+}
+
+template <unsigned N>
 void AbstractValue<N>::join(const AbstractValue& other) {
     // 1. Both are Sets
     if (this->kind == Kind::Set && other.kind == Kind::Set) {
-        std::vector<int> merged;
-        merged.reserve(this->values.size() + other.values.size());
+        std::set<int> merged;
+        // merged.reserve(this->values.size() + other.values.size());
         
         // Take the sorted union of both sets
         std::set_union(this->values.begin(), this->values.end(),
                        other.values.begin(), other.values.end(),
-                       std::back_inserter(merged));
+                       std::inserter(merged, merged.begin()));
         
         if (merged.size() <= N) {
             this->values = std::move(merged);
@@ -282,17 +334,20 @@ void AbstractValue<N>::join(const AbstractValue& other) {
             // Collapsing into a Strided Interval because we exceeded N
             this->kind = Kind::StridedInterval;
             
-            int base = merged.front();
+            int base = *merged.begin();
             int current_gcd = 0;
-            for (size_t i = 1; i < merged.size(); ++i) {
-                current_gcd = std::gcd(current_gcd, merged[i] - base);
+            for (int v : merged) {
+                if (v == base) {
+                    continue;
+                }
+                current_gcd = std::gcd(current_gcd, v - base);
             }
             
             this->lower.type = Bound::Type::Constant;
-            this->lower.value = merged.front();
+            this->lower.value = *merged.begin();
             
             this->upper.type = Bound::Type::Constant;
-            this->upper.value = merged.back();
+            this->upper.value = *merged.rbegin();
             
             this->stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
             this->values.clear();
@@ -309,15 +364,18 @@ void AbstractValue<N>::join(const AbstractValue& other) {
             return;
         }
         // Convert 'this' to an interval before resolving bounds with the other interval
-        int base = this->values.front();
+        int base = *this->values.begin();
         int current_gcd = 0;
-        for (size_t i = 1; i < this->values.size(); ++i) {
-            current_gcd = std::gcd(current_gcd, this->values[i] - base);
+        for (int v : this->values) {
+            if (v == base) {
+                continue;
+            }
+            current_gcd = std::gcd(current_gcd, v - base);
         }
         this->lower.type = Bound::Type::Constant;
-        this->lower.value = this->values.front();
+        this->lower.value = *this->values.begin();
         this->upper.type = Bound::Type::Constant;
-        this->upper.value = this->values.back();
+        this->upper.value = *this->values.rbegin();
         this->stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
         this->kind = Kind::StridedInterval;
         this->values.clear();

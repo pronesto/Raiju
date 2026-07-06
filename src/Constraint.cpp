@@ -45,6 +45,11 @@ bool PhiConstraint::eval(AbstractState& A) {
 ArithmeticConstraint::ArithmeticConstraint(std::string dest, std::string lhs, std::string rhs)
     : Constraint(std::move(dest)), op1(std::move(lhs)), op2(std::move(rhs)) {}
 
+
+// We can improve this
+// {c0, c1, c2} + {c3, c4, c5} -> [-infty, +infty]
+// Should be {c0 + c3, c0 + c4, ... c2 + c5}
+// Check loop 71-77
 // --- AddConstraint (v0 = v1 + v2) ---
 bool AddConstraint::eval(AbstractState& A) {
     AnalyzedValue old_val = A[variable_name];
@@ -62,14 +67,19 @@ bool AddConstraint::eval(AbstractState& A) {
             return old_val != result;
         }
 
+        std::vector<int> consts;
+
         // Add all cross-combinations of exact values
         for (int l : lhs.getValues()) {
             for (int r : rhs.getValues()) {
-                result.addConstant(l + r); 
+                consts.emplace_back(l + r);
+                // result.addConstant(l + r); 
                 // Note: result.addConstant will automatically collapse it 
                 // into a StridedInterval if it crosses threshold N
             }
         }
+
+        result.addConstants(consts);
     } 
     // Case 2: At least one is a Strided Interval -> compute interval addition hull
     else {
