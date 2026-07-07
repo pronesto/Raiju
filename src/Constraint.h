@@ -20,7 +20,7 @@ using AbstractState = std::unordered_map<std::string, AnalyzedValue>;
  */
 class Constraint {
 public:
-    const std::string variable_name;
+    const std::string def;
 
     explicit Constraint(std::string name);
     virtual ~Constraint() = default;
@@ -31,6 +31,8 @@ public:
      * @return true if the variable_name's value changed, false otherwise.
      */
     virtual bool eval(AbstractState& A) = 0;
+    
+    virtual std::vector<const std::string> &get_uses() const = 0; 
 };
 
 /**
@@ -43,6 +45,11 @@ private:
 public:
     InitializationConstraint(std::string var, int c);
     bool eval(AbstractState& A) override;
+
+    std::vector<const std::string> &get_uses() const override {
+        std::vector<const std::string> ret = {};
+        return ret;
+    }
 };
 
 /**
