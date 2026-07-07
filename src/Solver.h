@@ -5,6 +5,13 @@
 #include <vector>
 #include <memory>
 
+class SuperNode{
+    int node_id;
+    std::vector<std::string> variables;
+    std::vector<std::shared_ptr<Constraint>> constraints;
+    std::vector<int> out_edges;
+};
+
 class Solver{
     AbstractState& state;
     std::vector<std::shared_ptr<Constraint>> constraints;
@@ -17,6 +24,13 @@ class Solver{
         }
 
         void solve(){
+            growthAnalysis();
+            futureResolution();
+            narrowingAnalysis();
+        }
+    
+        void growthAnalysis()
+        {
             bool changed_evaluating = true;
 
             while(changed_evaluating){
@@ -25,10 +39,10 @@ class Solver{
                     if(constraint->eval(this->state)) changed_evaluating = true;
                 }
             }
-        
+        }
 
-            resolveFeatures();
-
+        void narrowingAnalysis()
+        {
             bool changed_narrowing = true;
             
             while(changed_narrowing) {
@@ -42,12 +56,12 @@ class Solver{
         }
 
     private:
-        void resolveFeatures(){
+
+        void futureResolutions(){
             for(auto& [var_name, val]: state){
-                val.concretize();
+                //val.concretize();
             }
         }
-
-}
+};
 
 #endif
