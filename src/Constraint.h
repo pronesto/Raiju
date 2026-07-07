@@ -31,6 +31,40 @@ public:
      * @return true if the variable_name's value changed, false otherwise.
      */
     virtual bool eval(AbstractState& A) = 0;
+    bool narrow(AbstractState& A)
+    {
+
+        AnalyzedValue i_Y = A[this->variable_name];
+        AnalyzedValue e_Y = A[this->variable_name]; // FIX ME
+
+        AnalyzedValue::Bound::Type  minus_inf = AnalyzedValue::Bound::Type::MinusInfinity;
+        AnalyzedValue::Bound::Type  inf = AnalyzedValue::Bound::Type::PlusInfinity; 
+
+        AnalyzedValue::Bound new_upper;
+        AnalyzedValue::Bound new_lower;
+
+        if(i_Y.getLower().type == minus_inf && e_Y.getLower().type > minus_inf)
+        {
+            new_lower = e_Y.getLower();
+        }else if(i_Y.getUpper().type == inf && e_Y.getUpper().type < inf)
+        {
+            new_upper = e_Y.getUpper();
+        }else if(i_Y.getLower().type > e_Y.getLower().type)
+        {
+            new_lower = e_Y.getLower();
+        }else if(i_Y.getUpper().type < e_Y.getUpper().type)
+        {
+            new_upper = e_Y.getUpper();
+        }
+
+        if (new_lower.type != i_Y.getLower().type || new_upper.type != i_Y.getUpper().type) {
+            AnalyzedValue av;
+            av.setAsInterval(new_lower, new_upper);
+            A[this->variable_name] = av;
+            return true;
+        }
+        return false;
+    }
 };
 
 /**
