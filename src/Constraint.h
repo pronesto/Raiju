@@ -11,6 +11,16 @@
 #include <variant>
 #include "AbstractValue.h"
 
+enum class EdgeType{
+   Data,
+   Future,
+};
+
+struct UseEdge{
+   std::string target_variable;
+   EdgeType type;
+};
+
 // Define our global abstract state table using the alias
 using AbstractState = std::unordered_map<std::string, AnalyzedValue>;
 
@@ -86,7 +96,10 @@ public:
 
     }
     
-    virtual std::vector<std::string> get_uses() const = 0; 
+    virtual std::vector<UseEdge> get_uses() const = 0; 
+    std::string get_def(){
+      return def;
+   }
 };
 
 /**
@@ -100,8 +113,8 @@ public:
     InitializationConstraint(std::string var, int c);
     bool eval(AbstractState& A) override;
 
-    std::vector<std::string> get_uses() const override {
-        std::vector<std::string> ret = {};
+    std::vector<UseEdge> get_uses() const override {
+        std::vector<UseEdge> ret = {};
         return ret;
     }
 };
@@ -117,8 +130,15 @@ public:
     PhiConstraint(std::string var, std::vector<std::string> ops);
     bool eval(AbstractState& A) override;
 
-    std::vector<std::string> get_uses() const override {
-      return operands;
+    std::vector<UseEdge> get_uses() const override {
+      std::vector<UseEdge> edges;
+      edges.reserve(operands.size());
+
+      for(const std::string& op : operands) {
+         edges.push_back({op, EdgeType::Data});
+      }
+      
+      return edges;
    }
 };
 
@@ -133,8 +153,8 @@ protected:
 public:
     ArithmeticConstraint(std::string dest, std::string lhs, std::string rhs);
 
-   std::vector<std::string> get_uses(){
-      return {op1, op2};
+   std::vector<UseEdge> get_uses() const override{
+      return {{op1, EdgeType::Data}, {op2, EdgeType::Data}};
    }
 };
 
@@ -192,17 +212,17 @@ public:
     bool eval(AbstractState& A) override;
 
 
-    std::vector<std::string> get_uses() const override {
+    std::vector<UseEdge> get_uses() const override {
 
-      std::vector<std::string> uses;
-      uses.push_back(operand);
+      std::vector<UseEdge> uses;
+      uses.push_back({operand, EdgeType::Data});
 
       if(std::holds_alternative<Future>(lower_bound)){
-         uses.push_back(std::get<Future>(lower_bound).target_variable);
+         uses.push_back({std::get<Future>(lower_bound).target_variable, EdgeType::Future});
       }
 
       if(std::holds_alternative<Future>(upper_bound)){
-         uses.push_back(std::get<Future>(upper_bound).target_variable);
+         uses.push_back({std::get<Future>(upper_bound).target_variable, EdgeType::Future});
       }
 
       return uses;
