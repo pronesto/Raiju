@@ -20,7 +20,7 @@ using AbstractState = std::unordered_map<std::string, AnalyzedValue>;
  */
 class Constraint {
 public:
-    const std::string variable_name;
+    const std::string def;
 
     explicit Constraint(std::string name);
     virtual ~Constraint() = default;
@@ -44,12 +44,12 @@ public:
       using Bound = AnalyzedValue::Bound;
       using Type  = Bound::Type;
 
-      AnalyzedValue oldY = A[variable_name];   // I[Y]
+      AnalyzedValue oldY = A[def];   // I[Y]
 
       // force eval()'s bottom-case branch
-      A[variable_name] = AnalyzedValue();      
+      A[def] = AnalyzedValue();      
       eval(A);                                 // e(Y)
-      AnalyzedValue eY = A[variable_name];
+      AnalyzedValue eY = A[def];
 
       Bound lo = oldY.getLower();
       Bound hi = oldY.getUpper();
@@ -78,13 +78,15 @@ public:
 
       AnalyzedValue result;
       result.setAsInterval(lo, hi, 1);
-      A[variable_name] = result;
+      A[def] = result;
 
       // Termination relies on this returning false when no further shrinking
       // occurs
       return result != oldY;
 
     }
+    
+    virtual std::vector<std::string> get_uses() const = 0; 
 };
 
 /**
@@ -97,6 +99,11 @@ private:
 public:
     InitializationConstraint(std::string var, int c);
     bool eval(AbstractState& A) override;
+
+    std::vector<std::string> get_uses() const override {
+        std::vector<std::string> ret = {};
+        return ret;
+    }
 };
 
 /**
@@ -109,6 +116,10 @@ private:
 public:
     PhiConstraint(std::string var, std::vector<std::string> ops);
     bool eval(AbstractState& A) override;
+
+    std::vector<std::string> get_uses() const override {
+      return operands;
+   }
 };
 
 /**
@@ -121,6 +132,10 @@ protected:
     std::string op2;
 public:
     ArithmeticConstraint(std::string dest, std::string lhs, std::string rhs);
+
+   std::vector<std::string> get_uses(){
+      return {op1, op2};
+   }
 };
 
 /**
@@ -175,4 +190,23 @@ public:
     IntersectionConstraint(std::string dest, std::string src,
                            IntersectionBound low, IntersectionBound up);
     bool eval(AbstractState& A) override;
+
+
+    std::vector<std::string> get_uses() const override {
+
+      std::vector<std::string> uses;
+      uses.push_back(operand);
+
+      if(std::holds_alternative<Future>(lower_bound)){
+         uses.push_back(std::get<Future>(lower_bound).target_variable);
+      }
+
+      if(std::holds_alternative<Future>(upper_bound)){
+         uses.push_back(std::get<Future>(upper_bound).target_variable);
+      }
+
+      return uses;
+    }
 };
+
+

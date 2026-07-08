@@ -135,7 +135,7 @@ bool AddConstraint::eval(AbstractState& A) {
 
   result.setAsInterval(lower, upper, std::gcd(s1, s2));
 
-  A[variable_name] = result;
+  A[def] = result;
   return old_val != result;
 }
 
@@ -191,7 +191,7 @@ IntersectionConstraint::resolveFutures(const AbstractState &state) const {
   };
 
   return IntersectionConstraint(
-      variable_name,
+      def,
       operand,
       resolve(lower_bound, true),
       resolve(upper_bound, false));
