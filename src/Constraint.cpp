@@ -8,20 +8,20 @@
 #include <cmath>
 
 // --- Base Constraint ---
-Constraint::Constraint(std::string name) : variable_name(std::move(name)) {}
+Constraint::Constraint(std::string name) : def(std::move(name)) {}
 
 // --- InitializationConstraint (v = c) ---
 InitializationConstraint::InitializationConstraint(std::string var, int c)
     : Constraint(std::move(var)), constant(c) {}
 
 bool InitializationConstraint::eval(AbstractState& A) {
-    AnalyzedValue old_val = A[variable_name];
+    AnalyzedValue old_val = A[def];
 
     // Build the exact set representation {c}
     AnalyzedValue new_val;
     new_val.addConstant(constant);
 
-    A[variable_name] = new_val;
+    A[def] = new_val;
     return old_val != new_val; // Leverages your custom equality operator!
 }
 
@@ -30,14 +30,14 @@ PhiConstraint::PhiConstraint(std::string var, std::vector<std::string> ops)
     : Constraint(std::move(var)), operands(std::move(ops)) {}
 
 bool PhiConstraint::eval(AbstractState& A) {
-    AnalyzedValue old_val = A[variable_name];
+    AnalyzedValue old_val = A[def];
     AnalyzedValue accumulated_join; // Starts at bottom element
 
     for (const auto& op : operands) {
         accumulated_join.join(A[op]);
     }
 
-    A[variable_name] = accumulated_join;
+    A[def] = accumulated_join;
     return old_val != accumulated_join;
 }
 
@@ -52,7 +52,7 @@ ArithmeticConstraint::ArithmeticConstraint(std::string dest, std::string lhs, st
 // Check loop 71-77
 // --- AddConstraint (v0 = v1 + v2) ---
 bool AddConstraint::eval(AbstractState& A) {
-    AnalyzedValue old_val = A[variable_name];
+    AnalyzedValue old_val = A[def];
     
     const AnalyzedValue& lhs = A[op1];
     const AnalyzedValue& rhs = A[op2];
@@ -63,7 +63,7 @@ bool AddConstraint::eval(AbstractState& A) {
     if (lhs.getKind() == AnalyzedValue::Kind::Set && rhs.getKind() == AnalyzedValue::Kind::Set) {
         // If either set is completely empty (bottom), the result remains bottom
         if (lhs.getValues().empty() || rhs.getValues().empty()) {
-            A[variable_name] = result;
+            A[def] = result;
             return old_val != result;
         }
 
@@ -114,7 +114,7 @@ bool AddConstraint::eval(AbstractState& A) {
         result.setAsInterval(new_low, new_up, new_stride); 
     }
 
-    A[variable_name] = result;
+    A[def] = result;
     return old_val != result;
 }
 
@@ -154,7 +154,7 @@ IntersectionConstraint::resolveBound(const IntersectionBound& b,
 
 bool IntersectionConstraint::eval(AbstractState& A) {
 
-    AnalyzedValue oldValue = A[variable_name];
+    AnalyzedValue oldValue = A[def];
     const AnalyzedValue& src = A[operand];
 
     // Bottom stays bottom.
@@ -214,6 +214,6 @@ bool IntersectionConstraint::eval(AbstractState& A) {
         }
     }
 
-    A[variable_name] = result;
+    A[def] = result;
     return oldValue != result;
 }
