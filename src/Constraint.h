@@ -32,7 +32,7 @@ public:
      */
     virtual bool eval(AbstractState& A) = 0;
     
-    virtual std::vector<const std::string> &get_uses() const = 0; 
+    virtual std::vector<std::string> get_uses() const = 0; 
 };
 
 /**
@@ -46,8 +46,8 @@ public:
     InitializationConstraint(std::string var, int c);
     bool eval(AbstractState& A) override;
 
-    std::vector<const std::string> &get_uses() const override {
-        std::vector<const std::string> ret = {};
+    std::vector<std::string> get_uses() const override {
+        std::vector<std::string> ret = {};
         return ret;
     }
 };
@@ -62,6 +62,10 @@ private:
 public:
     PhiConstraint(std::string var, std::vector<std::string> ops);
     bool eval(AbstractState& A) override;
+
+    std::vector<std::string> get_uses() const override {
+      return operands;
+   }
 };
 
 /**
@@ -74,6 +78,10 @@ protected:
     std::string op2;
 public:
     ArithmeticConstraint(std::string dest, std::string lhs, std::string rhs);
+
+   std::vector<std::string> get_uses(){
+      return {op1, op2};
+   }
 };
 
 /**
@@ -117,4 +125,23 @@ public:
     IntersectionConstraint(std::string dest, std::string src,
                            IntersectionBound low, IntersectionBound up);
     bool eval(AbstractState& A) override;
+
+
+    std::vector<std::string> get_uses() const override {
+
+      std::vector<std::string> uses;
+      uses.push_back(operand);
+
+      if(std::holds_alternative<Future>(lower_bound)){
+         uses.push_back(std::get<Future>(lower_bound).target_variable);
+      }
+
+      if(std::holds_alternative<Future>(upper_bound)){
+         uses.push_back(std::get<Future>(upper_bound).target_variable);
+      }
+
+      return uses;
+    }
 };
+
+
