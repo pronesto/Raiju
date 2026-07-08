@@ -31,12 +31,12 @@ public:
      * @return true if the variable_name's value changed, false otherwise.
      */
     virtual bool eval(AbstractState& A) = 0;
-    bool narrow(AbstractState& A)
+    virtual AnalyzedValue evaluateRHS(AbstractState& A) = 0;
+    bool narrow(AbstractState& A, AnalyzedValue& e_Y)
     {
 
         AnalyzedValue i_Y = A[this->variable_name];
-        AnalyzedValue e_Y = A[this->variable_name]; // FIX ME
-
+        
         AnalyzedValue::Bound::Type  minus_inf = AnalyzedValue::Bound::Type::MinusInfinity;
         AnalyzedValue::Bound::Type  inf = AnalyzedValue::Bound::Type::PlusInfinity; 
 
@@ -76,6 +76,7 @@ private:
     int constant;
 public:
     InitializationConstraint(std::string var, int c);
+    AnalyzedValue evaluateRHS(AbstractState& A) override;
     bool eval(AbstractState& A) override;
 };
 
@@ -88,6 +89,7 @@ private:
     std::vector<std::string> operands;
 public:
     PhiConstraint(std::string var, std::vector<std::string> ops);
+    AnalyzedValue evaluateRHS(AbstractState& A) override;
     bool eval(AbstractState& A) override;
 };
 
@@ -110,6 +112,7 @@ public:
 class AddConstraint : public ArithmeticConstraint {
 public:
     using ArithmeticConstraint::ArithmeticConstraint;
+    AnalyzedValue evaluateRHS(AbstractState& A) override;
     bool eval(AbstractState& A) override;
 };
 
@@ -143,5 +146,6 @@ private:
 public:
     IntersectionConstraint(std::string dest, std::string src,
                            IntersectionBound low, IntersectionBound up);
+    AnalyzedValue evaluateRHS(AbstractState& A) override;
     bool eval(AbstractState& A) override;
 };
