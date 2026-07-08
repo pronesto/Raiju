@@ -80,6 +80,8 @@ public:
      */
     void join(const AbstractValue& other);
 
+    AbstractValue<N> intersect(AbstractValue& av);
+
     /**
      * @brief Adds a single literal constant into the abstract value representation.
      * * @param val The integer constant to add.
@@ -355,6 +357,23 @@ void AbstractValue<N>::join(const AbstractValue& other) {
         }
     }
 }
+
+
+template <unsigned N>
+AbstractValue<N> AbstractValue<N>::intersect(AbstractValue& av)
+{
+    auto low   = std::max(this->getLower(), av.getLower());
+    auto upper = std::max(this->getUpper(), av.getUpper());
+
+    AbstractValue<N> res;
+
+    if (low.value > upper.value && low.type == Bound::Constant && upper.type == Bound::Constant) {
+        return res; 
+    }
+    res.setAsInterval(low, upper);
+    return res;
+}
+
 
 // Let's work with at most four constants per abstract state. If later on we
 // want more precision, then change this definition and recompile.

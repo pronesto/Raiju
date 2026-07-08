@@ -59,7 +59,7 @@ class Solver{
 
     private:
 
-        void futureResolutions(){
+        void futureResolution(){
             for(auto& [var_name, val]: state){
                 if(var.hasFutureBound())
                 {
