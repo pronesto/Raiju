@@ -1,6 +1,7 @@
 #ifndef SOLVER_H
 #define SOLVER_H
 
+#include "AbstractValue.h"
 #include "Constraint.h"
 #include <vector>
 #include <memory>
@@ -50,7 +51,8 @@ class Solver{
 
                 for(auto& constraint: constraints)
                 {
-                    if(constraint->narrow(this->state)) changed_narrowing = true;
+                    AnalyzedValue abstractValue = constraint->evaluateRHS(this->state);
+                    if(constraint->narrow(this->state, abstractValue)) changed_narrowing = true;
                 }
             }
         }
@@ -59,7 +61,12 @@ class Solver{
 
         void futureResolutions(){
             for(auto& [var_name, val]: state){
-                //val.concretize();
+                if(var.hasFutureBound())
+                {
+                    std::string target = var.getFutureTarget();
+                    AnalyzedValue targetValue = state[target];
+                    AnalyzedValue concrete = targetValue.addOffset(val.getFutureOffset());
+                }
             }
         }
 };
