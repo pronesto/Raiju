@@ -166,3 +166,135 @@ TEST_CASE("AbstractValue - Lattice Structural Equality", "[lattice][equality]") 
         REQUIRE(val1 != val2);
     }
 }
+
+#include <catch2/catch_test_macros.hpp>
+#include "AbstractValue.h"
+
+TEST_CASE("AbstractValue - Bound Relational Operators", "[lattice][comparison]") {
+    using Bound = AbstractValue<3>::Bound;
+
+    SECTION("Constant vs Constant comparisons") {
+        Bound b_low{Bound::Type::Constant, 10};
+        Bound b_high{Bound::Type::Constant, 20};
+        Bound b_same{Bound::Type::Constant, 10};
+
+        REQUIRE(b_low < b_high);
+        REQUIRE(b_low <= b_high);
+        REQUIRE(b_low <= b_same);
+        REQUIRE_FALSE(b_high < b_low);
+
+        REQUIRE(b_high > b_low);
+        REQUIRE(b_high >= b_low);
+        REQUIRE(b_same >= b_low);
+    }
+
+    SECTION("Infinities dominate comparisons correctly") {
+        Bound minf{Bound::Type::MinusInfinity, -999};
+        Bound pinf{Bound::Type::PlusInfinity, 999};
+        Bound c{Bound::Type::Constant, 0};
+
+        // Minus infinity checks
+        REQUIRE(minf < c);
+        REQUIRE(minf <= c);
+        REQUIRE(minf < pinf);
+        REQUIRE_FALSE(minf > c);
+
+        // Plus infinity checks
+        REQUIRE(pinf > c);
+        REQUIRE(pinf >= c);
+        REQUIRE(pinf > minf);
+        REQUIRE_FALSE(pinf < c);
+
+        // Strict identical type boundaries are not strictly less/greater
+        REQUIRE_FALSE(minf < minf);
+        REQUIRE_FALSE(pinf > pinf);
+        REQUIRE(minf <= minf);
+        REQUIRE(pinf >= pinf);
+    }
+}
+
+TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons", "[lattice][comparison]") {
+
+    SECTION("Empty sets (bottom elements) evaluate to false for safety") {
+        AbstractValue<3> empty1;
+        AbstractValue<3> empty2;
+        AbstractValue<3> populated;
+        populated.addConstant(5);
+
+        // Comparisons involving empty elements must return false under sound over-approximation
+        REQUIRE_FALSE(empty1 < populated);
+        REQUIRE_FALSE(populated < empty1);
+        REQUIRE_FALSE(empty1 < empty2);
+        REQUIRE_FALSE(empty1 <= empty2);
+    }
+
+    SECTION("Set vs Set sound comparisons") {
+        AbstractValue<3> set_low;   // {1, 2}
+        set_low.addConstant(1);
+        set_low.addConstant(2);
+
+        AbstractValue<3> set_high;  // {10, 11}
+        set_high.addConstant(10);
+        set_high.addConstant(11);
+
+        AbstractValue<3> set_overlap; // {2, 5}
+        set_overlap.addConstant(2);
+        set_overlap.addConstant(5);
+
+        // Completely disjoint and ordered
+        REQUIRE(set_low < set_high);
+        REQUIRE(set_low <= set_high);
+        REQUIRE(set_high > set_low);
+        REQUIRE(set_high >= set_low);
+
+        // Overlapping paths cannot be soundly ordered
+        // Fails because max(set_low) is not < min(set_overlap) (2 is not < 2)
+        REQUIRE_FALSE(set_low < set_overlap);
+        // Passes because max(set_low) <= min(set_overlap) (2 <= 2)
+        REQUIRE(set_low <= set_overlap);
+    }
+
+    SECTION("Set vs StridedInterval mixed comparisons") {
+        AbstractValue<3> set; // {1, 2, 3}
+        set.addConstant(1);
+        set.addConstant(2);
+        set.addConstant(3);
+
+        AbstractValue<3> interval; // Collapses into interval [10, 20] with stride 5
+        interval.addConstant(10);
+        interval.addConstant(15);
+        interval.addConstant(20);
+        interval.addConstant(25); // Forces collapse since N=3
+
+        REQUIRE(set < interval);
+        REQUIRE(set <= interval);
+        REQUIRE_FALSE(interval < set);
+    }
+
+    SECTION("StridedInterval vs Infinities") {
+        AbstractValue<3> interval; // [10, 20] collapsed
+        interval.addConstant(10);
+        interval.addConstant(15);
+        interval.addConstant(20);
+        interval.addConstant(25);
+
+        AbstractValue<3> infinite_top;
+        infinite_top.setAsInterval(
+            {AbstractValue<3>::Bound::Type::Constant, 100},
+            {AbstractValue<3>::Bound::Type::PlusInfinity, 0}
+        );
+
+        AbstractValue<3> infinite_bottom;
+        infinite_bottom.setAsInterval(
+            {AbstractValue<3>::Bound::Type::MinusInfinity, 0},
+            {AbstractValue<3>::Bound::Type::Constant, -5}
+        );
+
+        REQUIRE(interval < infinite_top);
+        REQUIRE(infinite_bottom < interval);
+
+        // Cannot cleanly order an upper infinite interval against a regular high window
+        REQUIRE_FALSE(infinite_top < interval);
+        REQUIRE_FALSE(interval < infinite_bottom);
+    }
+}

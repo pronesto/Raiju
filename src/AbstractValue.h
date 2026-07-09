@@ -179,6 +179,35 @@ public:
     }
 
     /**
+     * @brief Less-than operator for two Bounds.
+     */
+    friend bool operator<(const Bound& lhs, const Bound& rhs) {
+      if (lhs.type == rhs.type) {
+        if (lhs.type == Bound::Type::Constant) {
+          return lhs.value < rhs.value;
+        }
+        return false; // Both are -Infinity or both are +Infinity
+      }
+      // Handle distinct types
+      if (lhs.type == Bound::Type::MinusInfinity) return true;
+      if (lhs.type == Bound::Type::PlusInfinity) return false;
+      // lhs is Constant
+      return rhs.type == Bound::Type::PlusInfinity;
+    }
+
+    friend bool operator<=(const Bound& lhs, const Bound& rhs) {
+      return (lhs < rhs) || (lhs == rhs);
+    }
+
+    friend bool operator>(const Bound& lhs, const Bound& rhs) {
+      return rhs < lhs;
+    }
+
+    friend bool operator>=(const Bound& lhs, const Bound& rhs) {
+      return !(lhs < rhs);
+    }
+
+    /**
      * @brief Checks if two AbstractValues are completely identical in the lattice.
      * @param other The abstract value to compare against.
      * @return true if both states share the exact same abstract representation, false otherwise.
@@ -207,6 +236,71 @@ public:
      */
     bool operator!=(const AbstractValue& other) const {
         return !(*this == other);
+    }
+
+    /**
+     * @brief Checks if every possible value in 'this' is strictly less than every value in 'other'.
+     */
+    bool operator<(const AbstractValue& other) const {
+      // If either abstract state is empty (bottom), comparison is trivially false
+      if ((this->kind == Kind::Set && this->values.empty()) ||
+          (other.kind == Kind::Set && other.values.empty())) {
+        return false;
+      }
+
+      // Extract boundaries for 'this'
+      Bound this_upper;
+      if (this->kind == Kind::Set) {
+        this_upper = Bound{Bound::Type::Constant, this->values.back()};
+      } else {
+        this_upper = this->upper;
+      }
+
+      // Extract boundaries for 'other'
+      Bound other_lower;
+      if (other.kind == Kind::Set) {
+        other_lower = Bound{Bound::Type::Constant, other.values.front()};
+      } else {
+        other_lower = other.lower;
+      }
+
+      // 'this' < 'other' holds true globally if max(this) < min(other)
+      return this_upper < other_lower;
+    }
+
+    /**
+     * @brief Checks if every possible value in 'this' is less than or equal to every
+     * value in 'other'.
+     */
+    bool operator<=(const AbstractValue& other) const {
+      if ((this->kind == Kind::Set && this->values.empty()) ||
+          (other.kind == Kind::Set && other.values.empty())) {
+        return false;
+      }
+
+      Bound this_upper = (this->kind == Kind::Set)
+        ? Bound{Bound::Type::Constant, this->values.back()} : this->upper;
+
+      Bound other_lower = (other.kind == Kind::Set)
+        ? Bound{Bound::Type::Constant, other.values.front()} : other.lower;
+
+      return this_upper <= other_lower;
+    }
+
+    /**
+     * @brief Checks if every possible value in 'this' is strictly greater
+     * than every value in 'other'.
+     */
+    bool operator>(const AbstractValue& other) const {
+      return other < *this;
+    }
+
+    /**
+     * @brief Checks if every possible value in 'this' is greater than or
+     * equal to every value in 'other'.
+     */
+    bool operator>=(const AbstractValue& other) const {
+      return other <= *this;
     }
 };
 
