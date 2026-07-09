@@ -44,8 +44,14 @@ class Solver{
 
                 for(auto& constraint: constraints)
                 {
-                    AnalyzedValue abstractValue = constraint->evaluateRHS(this->state);
-                    if(constraint->narrow(this->state, abstractValue)) changed_narrowing = true;
+                    AbstractState stateBeforeEval = this->state;
+                    bool is_eval = constraint->eval(this->state);
+                    
+                    if(is_eval)
+                    {
+                        AbstractState stateAfterEval = this->state;
+                        if(constraint->narrow(stateBeforeEval, stateAfterEval)) changed_narrowing = true;
+                    }
                 }
             }
         }
