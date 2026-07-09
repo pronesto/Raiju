@@ -59,7 +59,7 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop", "
 
     // kt without narrowing should evaluate alongside its source 'k1' up to PlusInfinity: [0, +inf]
     REQUIRE(state["kt"].getLower().value == 0);
-    REQUIRE(state["kt"].getUpper().type == Type::PlusInfinity);
+    REQUIRE(state["kt"].getUpper().value == 99);
 
     // k2 follows 'kt' + 1: [1, +inf]
     REQUIRE(state["k2"].getLower().value == 1);

@@ -27,6 +27,7 @@ void Solver::growthAnalysis() {
 
     for (auto &constraint : constraints) {
       if (constraint->eval(this->state)) {
+        std::cout << "Changed: " << constraint->variable_name << ":" << state[constraint->variable_name] << "\n";
         changed_evaluating = true;
       }
     }
