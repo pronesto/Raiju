@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ==========================================
 
 # Executable for the main static analyzer tool
-add_executable(lattice_analyzer src/main.cpp src/Constraint.cpp)
+add_executable(lattice_analyzer src/main.cpp src/Constraint.cpp src/Solver.cpp)
 
 # Specify include directories directly on the target
 target_include_directories(lattice_analyzer PRIVATE src)

@@ -1,3 +1,9 @@
+/**
+ * @file Solver.h
+ * @brief Declaration of the Solver class responsible for running fixed-point
+ * dataflow analyses.
+ */
+
 #ifndef SOLVER_H
 #define SOLVER_H
 
@@ -6,64 +12,70 @@
 #include <memory>
 #include <vector>
 
+/**
+ * @class Solver
+ * @brief Coordinates the growth, resolution, and narrowing phases of the range
+ * analysis solver.
+ *
+ * This class orchestrates a multi-step abstract interpretation pipeline,
+ * driving the system of abstract state constraints to a sound mathematical
+ * fixed point.
+ */
 class Solver {
+private:
+  /** @brief Reference to the global abstract state table mapping variables to
+   * domains. */
   AbstractState &state;
+
+  /** @brief Collection of dataflow/SSA constraint equations to execute. */
   std::vector<std::shared_ptr<Constraint>> constraints;
 
+  /**
+   * @brief Resolves symbolic/future boundaries into concrete bounds using
+   * current state data.
+   * * Iterates through the abstract state map, evaluates relational
+   * dependencies between variables (like offset relations), and updates the
+   * bounds dynamically.
+   */
+  void futureResolution();
+
 public:
-  explicit Solver(AbstractState &state) : state(state) {}
+  /**
+   * @brief Constructs a new Solver instance bound to a given abstract state.
+   * @param state A reference to the global variable-to-value map tracking the
+   * analysis.
+   */
+  explicit Solver(AbstractState &state);
 
-  void addConstraint(std::shared_ptr<Constraint> constraint) {
-    constraints.push_back(constraint);
-  }
+  /**
+   * @brief Registers a new dataflow constraint equation into the solver
+   * pipeline.
+   * @param constraint Shared pointer to an abstract Constraint subclass.
+   */
+  void addConstraint(std::shared_ptr<Constraint> constraint);
 
-  void solve() {
-    growthAnalysis();
-    futureResolution();
-    narrowingAnalysis();
-  }
+  /**
+   * @brief Main driver that executes all stages of the range analysis pipeline.
+   * * Progresses sequentially through the widening/growth phase, symbolic
+   * future resolution, and the monotonic narrowing phase until a fixed point is
+   * met.
+   */
+  void solve();
 
-  void growthAnalysis() {
-    bool changed_evaluating = true;
+  /**
+   * @brief Runs the initial growth (widening) analysis loop.
+   * * Iteratively evaluates dataflow equations. This step propagates and widens
+   * bounds upwards until the values stabilize or are forced to infinity.
+   */
+  void growthAnalysis();
 
-    while (changed_evaluating) {
-      changed_evaluating = false;
-      for (auto &constraint : constraints) {
-        if (constraint->eval(this->state))
-          changed_evaluating = true;
-      }
-    }
-  }
-
-  void narrowingAnalysis() {
-    bool changed_narrowing = true;
-
-    while (changed_narrowing) {
-      changed_narrowing = false;
-
-      for (auto &constraint : constraints) {
-        AbstractState stateBeforeEval = this->state;
-        bool is_eval = constraint->eval(this->state);
-
-        if (is_eval) {
-          AbstractState stateAfterEval = this->state;
-          if (constraint->narrow(stateBeforeEval, stateAfterEval))
-            changed_narrowing = true;
-        }
-      }
-    }
-  }
-
-private:
-  void futureResolution() {
-    for (auto &[var_name, val] : state) {
-      if (var.hasFutureBound()) {
-        std::string target = var.getFutureTarget();
-        AnalyzedValue targetValue = state[target];
-        AnalyzedValue concrete = targetValue.addOffset(val.getFutureOffset());
-      }
-    }
-  }
+  /**
+   * @brief Runs the narrowing analysis loop to reclaim precision loss.
+   * * Iteratively applies monotonic narrowing operators. It evaluates
+   * constraints and attempts to contract over-approximated interval boundaries
+   * without violating soundness.
+   */
+  void narrowingAnalysis();
 };
 
-#endif
+#endif // SOLVER_H
