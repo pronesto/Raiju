@@ -6,13 +6,6 @@
 #include <vector>
 #include <memory>
 
-class SuperNode{
-    int node_id;
-    std::vector<std::string> variables;
-    std::vector<std::shared_ptr<Constraint>> constraints;
-    std::vector<int> out_edges;
-};
-
 class Solver{
     AbstractState& state;
     std::vector<std::shared_ptr<Constraint>> constraints;
