@@ -31,7 +31,9 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(analyzer_tests
     tests/test_abstract_value.cpp
     tests/test_constraints.cpp
+    tests/test_solver.cpp
     src/Constraint.cpp
+    src/Solver.cpp
 )
 
 # Ensure the test target can also locate headers inside src/
