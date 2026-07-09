@@ -11,33 +11,41 @@
 
 /**
  * @class AbstractValue
- * @brief Represents an element in the Finite-Set / Strided-Interval abstract domain.
- * * This class tracks numerical variables during static analysis. It maintains an exact 
- * set of constants up to a capacity @p N. If the number of constants exceeds @p N, 
- * it collapses into a strided interval representation to ensure a bounded abstract state.
- * * @tparam N The compile-time constant determining the maximum size of exact sets.
+ * @brief Represents an element in the Finite-Set / Strided-Interval abstract
+ * domain.
+ * 
+ * This class tracks numerical variables during static analysis. It maintains
+ * an exact set of constants up to a capacity @p N. If the number of constants
+ * exceeds @p N, then it collapses into a strided interval representation to
+ * ensure a bounded abstract state.
+ *
+ * @tparam N The compile-time constant determining the maximum size of exact
+ * sets.
  */
 template <unsigned N>
 class AbstractValue {
 public:
 
     /**
-     * @brief Maximum number of distinct constants tracked exactly by this domain.
+     * @brief Maximum number of distinct constants tracked exactly by this
+     * domain.
      */
     static constexpr unsigned MaxConstants = N;
 
     /**
      * @enum Kind
-     * @brief Represents the current underlying representation of the abstract value.
+     * @brief Represents the current underlying representation of the abstract
+     * value.
      */
     enum class Kind {
-        Set,             /**< The value is tracked exactly as a finite set of constants. */
-        StridedInterval  /**< The value has collapsed into a strided interval. */
+        Set,             /**< The value is tracked as a set of constants. */
+        StridedInterval  /**< The value collapses into a strided interval. */
     };
 
     /**
      * @struct Bound
-     * @brief Represents a boundary point of a strided interval, handling infinities.
+     * @brief Represents a boundary point of a strided interval, handling
+     * infinities.
      */
     struct Bound {
         /**
@@ -208,9 +216,11 @@ public:
     }
 
     /**
-     * @brief Checks if two AbstractValues are completely identical in the lattice.
+     * @brief Checks if two AbstractValues are completely identical in the
+     * lattice.
      * @param other The abstract value to compare against.
-     * @return true if both states share the exact same abstract representation, false otherwise.
+     * @return true if both states share the exact same abstract
+     * representation, false otherwise.
      */
     bool operator==(const AbstractValue& other) const {
         // 1. Structural kind must match
@@ -239,10 +249,12 @@ public:
     }
 
     /**
-     * @brief Checks if every possible value in 'this' is strictly less than every value in 'other'.
+     * @brief Checks if every possible value in 'this' is strictly less than
+     * every value in 'other'.
      */
     bool operator<(const AbstractValue& other) const {
-      // If either abstract state is empty (bottom), comparison is trivially false
+      // If either abstract state is empty (bottom), comparison is trivially
+      // false
       if ((this->kind == Kind::Set && this->values.empty()) ||
           (other.kind == Kind::Set && other.values.empty())) {
         return false;

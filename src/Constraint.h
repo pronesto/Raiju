@@ -33,8 +33,10 @@ public:
     virtual bool eval(AbstractState& A) = 0;
 
     /**
-     * @brief Refines the abstract value of a variable using a monotonic narrowing operator.
-     * @param A The current abstract state map tracking variable domain evaluations.
+     * @brief Refines the abstract value of a variable using a monotonic
+     * narrowing operator.
+     * @param A The current abstract state map tracking variable domain
+     * evaluations.
      * @return true if the abstract value was successfully narrowed (shrunk),
      * false if the domain remained unchanged (indicating a fixed point).
      */
@@ -44,7 +46,8 @@ public:
 
       AnalyzedValue oldY = A[variable_name];   // I[Y]
 
-      A[variable_name] = AnalyzedValue();      // force eval()'s bottom-case branch
+      // force eval()'s bottom-case branch
+      A[variable_name] = AnalyzedValue();      
       eval(A);                                 // e(Y)
       AnalyzedValue eY = A[variable_name];
 
@@ -61,11 +64,13 @@ public:
           eY.getUpper().type  != Type::PlusInfinity) {
         hi = eY.getUpper();
       }
-      // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower bound -> Narrow!
+      // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower
+      // bound -> Narrow!
       else if (eY.getLower() > oldY.getLower()) {
         lo = eY.getLower();
       }
-      // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper bound -> Narrow!
+      // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper
+      // bound -> Narrow!
       else if (eY.getUpper() < oldY.getUpper()) {
         hi = eY.getUpper();
       }
@@ -74,7 +79,8 @@ public:
       result.setAsInterval(lo, hi, 1);
       A[variable_name] = result;
 
-      // Termination relies on this returning false when no further shrinking occurs
+      // Termination relies on this returning false when no further shrinking
+      // occurs
       return result != oldY;
     }
 };
@@ -140,7 +146,8 @@ public:
         int offset; // Handles relations like Future(y) - 1 or Future(x) + 1
     };
 
-    // An intersection boundary can be a literal Constant, an Infinity, or a Future
+    // An intersection boundary can be a literal Constant, an Infinity, or a
+    // Future
     using IntersectionBound = std::variant<AnalyzedValue::Bound, Future>;
 
 private:
@@ -148,9 +155,13 @@ private:
     IntersectionBound lower_bound;
     IntersectionBound upper_bound;
 
-    // Helper to resolve a variant bound into a concrete AnalyzedValue::Bound at runtime
-    AnalyzedValue::Bound resolveBound(const IntersectionBound& b, const bool isLower,
-        const AbstractState& A) const;
+    // Helper to resolve a variant bound into a concrete AnalyzedValue::Bound
+    // at runtime
+    AnalyzedValue::Bound resolveBound(
+        const IntersectionBound& b,
+        const bool isLower,
+        const AbstractState& A
+        ) const;
 
 public:
     IntersectionConstraint(std::string dest, std::string src,
