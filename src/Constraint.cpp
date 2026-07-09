@@ -25,12 +25,6 @@ bool InitializationConstraint::eval(AbstractState& A) {
     return old_val != new_val; // Leverages your custom equality operator!
 }
 
-AnalyzedValue InitializationConstraint::evaluateRHS(AbstractState& A)
-{
-    AnalyzedValue av;
-    av.addConstant(constant);
-    return av;
-}
 
 // --- PhiConstraint (v0 = phi(v1, v2, ...)) ---
 PhiConstraint::PhiConstraint(std::string var, std::vector<std::string> ops)
@@ -46,15 +40,6 @@ bool PhiConstraint::eval(AbstractState& A) {
 
     A[variable_name] = accumulated_join;
     return old_val != accumulated_join;
-}
-
-AnalyzedValue PhiConstraint::evaluateRHS(AbstractState& A)
-{
-    AnalyzedValue result;
-    for (const auto& op : operands) {
-        result.join(A[op]);
-    }
-    return result;
 }
 
 // --- ArithmeticConstraint Base ---
@@ -122,11 +107,6 @@ bool AddConstraint::eval(AbstractState& A) {
 
     A[variable_name] = result;
     return old_val != result;
-}
-
-AnalyzedValue AddConstraint::evaluateRHS(AbstractState& A)
-{
-    return A[op1].add(A[op2]);    
 }
 
 
@@ -227,14 +207,4 @@ bool IntersectionConstraint::eval(AbstractState& A) {
 
     A[variable_name] = result;
     return oldValue != result;
-}
-
-AnalyzedValue IntersectionConstraint::evaluateRHS(AbstractState& A)
-{
-    AnalyzedValue::Bound low = resolveBound(lower_bound, true, A);
-    AnalyzedValue::Bound up = resolveBound(upper_bound, false, A);
-    
-    AnalyzedValue result;
-    result.setAsInterval(low, up);
-    return result.intersect(A[operand]);
 }

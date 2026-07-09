@@ -89,7 +89,6 @@ private:
     std::vector<std::string> operands;
 public:
     PhiConstraint(std::string var, std::vector<std::string> ops);
-    AnalyzedValue evaluateRHS(AbstractState& A) override;
     bool eval(AbstractState& A) override;
 };
 
