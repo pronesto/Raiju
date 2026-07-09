@@ -411,23 +411,34 @@ template <unsigned N> void AbstractValue<N>::join(const AbstractValue &other) {
     if (merged.size() <= N) {
       this->values = std::move(merged);
     } else {
-      // Collapsing into a Strided Interval because we exceeded N
       this->kind = Kind::StridedInterval;
 
+      int oldMin = this->values.front();
+      int oldMax = this->values.back();
+
+      int newMin = merged.front();
+      int newMax = merged.back();
+
+      // Lower bound widens only if it moved.
+      if (newMin < oldMin)
+        this->lower = {Bound::Type::MinusInfinity, 0};
+      else
+        this->lower = {Bound::Type::Constant, oldMin};
+
+      // Upper bound widens only if it moved.
+      if (newMax > oldMax)
+        this->upper = {Bound::Type::PlusInfinity, 0};
+      else
+        this->upper = {Bound::Type::Constant, oldMax};
+
+      // Compute stride from the merged values.
       int base = merged.front();
-      int current_gcd = 0;
-      for (size_t i = 1; i < merged.size(); ++i) {
-        current_gcd = std::gcd(current_gcd, merged[i] - base);
-      }
+      int g = 0;
+      for (size_t i = 1; i < merged.size(); ++i)
+        g = std::gcd(g, merged[i] - base);
 
-      this->lower.type = Bound::Type::Constant;
-      this->lower.value = merged.front();
+      this->stride = (g == 0) ? 1 : static_cast<unsigned>(g);
 
-      this->upper.type = Bound::Type::Constant;
-      this->upper.value = merged.back();
-
-      this->stride =
-          (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
       this->values.clear();
     }
     return;

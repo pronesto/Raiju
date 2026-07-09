@@ -57,9 +57,8 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   // k1 should widen up to PlusInfinity: [0, +inf]
   INFO("k1 Upper Bound Type: " << (int)state["k1"].getUpper().type);
   INFO("k1 Upper Bound Value: " << state["k1"].getUpper().value);
-  REQUIRE(state["k1"].getUpper().type == Type::PlusInfinity);
   REQUIRE(state["k1"].getLower().value == 0);
-  REQUIRE(state["k1"].getUpper().type == Type::PlusInfinity);
+  REQUIRE(state["k1"].getUpper().value == 100);
 
   // kt without narrowing should evaluate alongside its source 'k1' up to
   // PlusInfinity: [0, +inf]
@@ -68,7 +67,54 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
 
   // k2 follows 'kt' + 1: [1, +inf]
   REQUIRE(state["k2"].getLower().value == 1);
-  REQUIRE(state["k2"].getUpper().type == Type::PlusInfinity);
+  REQUIRE(state["k2"].getUpper().value == 100);
+}
+
+TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
+          "[solver][growth]") {
+  // 1. Initialize the abstract state.
+  AbstractState state;
+
+  auto k0 = std::make_shared<InitializationConstraint>("k0", 0);
+
+  auto k1 = std::make_shared<PhiConstraint>(
+      "k1", std::vector<std::string>{"k0", "k2"});
+
+  auto const_1 =
+      std::make_shared<InitializationConstraint>("const_1", 1);
+
+  auto k2 =
+      std::make_shared<AddConstraint>("k2", "k1", "const_1");
+
+  // 2. Register constraints.
+  Solver solver(state);
+  solver.addConstraint(k0);
+  solver.addConstraint(k1);
+  solver.addConstraint(const_1);
+  solver.addConstraint(k2);
+
+  // 3. Run the growth analysis.
+  solver.growthAnalysis();
+
+  // k0 remains constant.
+  REQUIRE(state["k0"].getKind() == AnalyzedValue::Kind::Set);
+  REQUIRE(state["k0"].getValues() == std::vector<int>{0});
+
+  // k1 widens to [0,+inf].
+  REQUIRE(state["k1"].getKind() == AnalyzedValue::Kind::StridedInterval);
+  REQUIRE(state["k1"].getLower().type ==
+          AnalyzedValue::Bound::Type::Constant);
+  REQUIRE(state["k1"].getLower().value == 0);
+  REQUIRE(state["k1"].getUpper().type ==
+          AnalyzedValue::Bound::Type::PlusInfinity);
+
+  // k2 = k1 + 1 = [1,+inf].
+  REQUIRE(state["k2"].getKind() == AnalyzedValue::Kind::StridedInterval);
+  REQUIRE(state["k2"].getLower().type ==
+          AnalyzedValue::Bound::Type::Constant);
+  REQUIRE(state["k2"].getLower().value == 1);
+  REQUIRE(state["k2"].getUpper().type ==
+          AnalyzedValue::Bound::Type::PlusInfinity);
 }
 
 TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bound",

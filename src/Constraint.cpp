@@ -53,140 +53,83 @@ bool AddConstraint::eval(AbstractState &A) {
   const AnalyzedValue &lhs = A[op1];
   const AnalyzedValue &rhs = A[op2];
 
-  AnalyzedValue result; // Starts at bottom (empty set)
+  AnalyzedValue result;
 
-  // Case 1: Both are explicit sets -> compute exact pairwise additions
+  // Exact evaluation: finite set × finite set
   if (lhs.getKind() == AnalyzedValue::Kind::Set &&
       rhs.getKind() == AnalyzedValue::Kind::Set) {
-    // If either set is completely empty (bottom), the result remains bottom
+
+    // Bottom propagates.
     if (lhs.getValues().empty() || rhs.getValues().empty()) {
       A[variable_name] = result;
       return old_val != result;
     }
 
-    // Add all cross-combinations of exact values
     for (int l : lhs.getValues()) {
       for (int r : rhs.getValues()) {
         result.addConstant(l + r);
-        // Note: result.addConstant will automatically collapse it
-        // into a StridedInterval if it crosses threshold N
       }
     }
+
+    A[variable_name] = result;
+    return old_val != result;
   }
-  // Case 2: At least one is a Strided Interval -> compute interval addition
-  // hull
-  else {
-    // 1. Safely extract base bounds for LHS and RHS
-    AnalyzedValue::Bound lhs_low =
-        (lhs.getKind() == AnalyzedValue::Kind::Set)
-            ? AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant,
-                                   lhs.getValues().front()}
-            : lhs.getLower();
-    AnalyzedValue::Bound lhs_up =
-        (lhs.getKind() == AnalyzedValue::Kind::Set)
-            ? AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant,
-                                   lhs.getValues().back()}
-            : lhs.getUpper();
 
-    AnalyzedValue::Bound rhs_low =
-        (rhs.getKind() == AnalyzedValue::Kind::Set)
-            ? AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant,
-                                   rhs.getValues().front()}
-            : rhs.getLower();
-    AnalyzedValue::Bound rhs_up =
-        (rhs.getKind() == AnalyzedValue::Kind::Set)
-            ? AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant,
-                                   rhs.getValues().back()}
-            : rhs.getUpper();
-
-    AnalyzedValue::Bound new_low;
-    AnalyzedValue::Bound new_up;
-
-    // Check if we are adding a single exact constant C to an interval
-    bool lhs_is_interval =
-        (lhs.getKind() == AnalyzedValue::Kind::StridedInterval);
-    bool rhs_is_interval =
-        (rhs.getKind() == AnalyzedValue::Kind::StridedInterval);
-
-    // Scenario A: Interval + Constant
-    if (lhs_is_interval && rhs.getKind() == AnalyzedValue::Kind::Set &&
-        rhs.getValues().size() == 1) {
-      int c = rhs.getValues().front();
-
-      // Lower Bound Rule
-      if (c < 0 || lhs_low.type == AnalyzedValue::Bound::Type::MinusInfinity) {
-        new_low.type = AnalyzedValue::Bound::Type::MinusInfinity;
-        new_low.value = 0;
-      } else {
-        new_low.type = AnalyzedValue::Bound::Type::Constant;
-        new_low.value = lhs_low.value + c;
-      }
-
-      // Upper Bound Rule
-      if (c > 0 || lhs_up.type == AnalyzedValue::Bound::Type::PlusInfinity) {
-        new_up.type = AnalyzedValue::Bound::Type::PlusInfinity;
-        new_up.value = 0;
-      } else {
-        new_up.type = AnalyzedValue::Bound::Type::Constant;
-        new_up.value = lhs_up.value + c;
-      }
+  // Otherwise treat every operand as a strided interval.
+  auto getLower = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
+    if (v.getKind() == AnalyzedValue::Kind::Set) {
+      return {AnalyzedValue::Bound::Type::Constant,
+              v.getValues().front()};
     }
-    // Scenario B: Constant + Interval
-    else if (rhs_is_interval && lhs.getKind() == AnalyzedValue::Kind::Set &&
-             lhs.getValues().size() == 1) {
-      int c = lhs.getValues().front();
+    return v.getLower();
+  };
 
-      // Lower Bound Rule
-      if (c < 0 || rhs_low.type == AnalyzedValue::Bound::Type::MinusInfinity) {
-        new_low.type = AnalyzedValue::Bound::Type::MinusInfinity;
-        new_low.value = 0;
-      } else {
-        new_low.type = AnalyzedValue::Bound::Type::Constant;
-        new_low.value = rhs_low.value + c;
-      }
-
-      // Upper Bound Rule
-      if (c > 0 || rhs_up.type == AnalyzedValue::Bound::Type::PlusInfinity) {
-        new_up.type = AnalyzedValue::Bound::Type::PlusInfinity;
-        new_up.value = 0;
-      } else {
-        new_up.type = AnalyzedValue::Bound::Type::Constant;
-        new_up.value = rhs_up.value + c;
-      }
+  auto getUpper = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
+    if (v.getKind() == AnalyzedValue::Kind::Set) {
+      return {AnalyzedValue::Bound::Type::Constant,
+              v.getValues().back()};
     }
-    // Fallback: Default standard interval arithmetic hull (Interval + Interval,
-    // etc.)
-    else {
-      if (lhs_low.type == AnalyzedValue::Bound::Type::MinusInfinity ||
-          rhs_low.type == AnalyzedValue::Bound::Type::MinusInfinity) {
-        new_low.type = AnalyzedValue::Bound::Type::MinusInfinity;
-        new_low.value = 0;
-      } else {
-        new_low.type = AnalyzedValue::Bound::Type::Constant;
-        new_low.value = lhs_low.value + rhs_low.value;
-      }
+    return v.getUpper();
+  };
 
-      if (lhs_up.type == AnalyzedValue::Bound::Type::PlusInfinity ||
-          rhs_up.type == AnalyzedValue::Bound::Type::PlusInfinity) {
-        new_up.type = AnalyzedValue::Bound::Type::PlusInfinity;
-        new_up.value = 0;
-      } else {
-        new_up.type = AnalyzedValue::Bound::Type::Constant;
-        new_up.value = lhs_up.value + rhs_up.value;
-      }
-    }
+  auto addLower =
+      [](const AnalyzedValue::Bound &a,
+         const AnalyzedValue::Bound &b) -> AnalyzedValue::Bound {
 
-    // Keep stride arithmetic unchanged
-    unsigned s1 = (lhs.getKind() == AnalyzedValue::Kind::StridedInterval)
-                      ? lhs.getStride()
-                      : 1;
-    unsigned s2 = (rhs.getKind() == AnalyzedValue::Kind::StridedInterval)
-                      ? rhs.getStride()
-                      : 1;
-    unsigned new_stride = std::gcd(s1, s2);
+    if (a.type == AnalyzedValue::Bound::Type::MinusInfinity ||
+        b.type == AnalyzedValue::Bound::Type::MinusInfinity)
+      return {AnalyzedValue::Bound::Type::MinusInfinity, 0};
 
-    result.setAsInterval(new_low, new_up, new_stride);
-  }
+    return {AnalyzedValue::Bound::Type::Constant,
+            a.value + b.value};
+  };
+
+  auto addUpper =
+      [](const AnalyzedValue::Bound &a,
+         const AnalyzedValue::Bound &b) -> AnalyzedValue::Bound {
+
+    if (a.type == AnalyzedValue::Bound::Type::PlusInfinity ||
+        b.type == AnalyzedValue::Bound::Type::PlusInfinity)
+      return {AnalyzedValue::Bound::Type::PlusInfinity, 0};
+
+    return {AnalyzedValue::Bound::Type::Constant,
+            a.value + b.value};
+  };
+
+  auto lower = addLower(getLower(lhs), getLower(rhs));
+  auto upper = addUpper(getUpper(lhs), getUpper(rhs));
+
+  unsigned s1 =
+      (lhs.getKind() == AnalyzedValue::Kind::StridedInterval)
+          ? lhs.getStride()
+          : 1;
+
+  unsigned s2 =
+      (rhs.getKind() == AnalyzedValue::Kind::StridedInterval)
+          ? rhs.getStride()
+          : 1;
+
+  result.setAsInterval(lower, upper, std::gcd(s1, s2));
 
   A[variable_name] = result;
   return old_val != result;
