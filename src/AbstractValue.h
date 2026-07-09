@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iostream>
 #include <numeric>
 #include <vector>
 
@@ -306,6 +307,36 @@ public:
    * equal to every value in 'other'.
    */
   bool operator>=(const AbstractValue &other) const { return other <= *this; }
+
+  /**
+   * @brief Overload for printing individual boundaries (e.g., -inf, 42, +inf).
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Bound& bound) {
+    switch (bound.type) {
+      case Bound::Type::MinusInfinity: os << "-inf"; break;
+      case Bound::Type::PlusInfinity:  os << "+inf"; break;
+      case Bound::Type::Constant:      os << bound.value; break;
+    }
+    return os;
+  }
+
+  /**
+   * @brief Overload for printing the entire AbstractValue state.
+   */
+  friend std::ostream& operator<<(std::ostream& os, const AbstractValue& av) {
+    if (av.kind == Kind::Set) {
+      os << "{";
+      for (size_t i = 0; i < av.values.size(); ++i) {
+        os << av.values[i];
+        if (i + 1 < av.values.size()) os << ", ";
+      }
+      os << "}";
+    } else { // Kind::StridedInterval
+      os << "[" << av.lower << ", " << av.upper << "] "
+        << "stride: " << av.stride;
+    }
+    return os;
+  }
 };
 
 template <unsigned N> void AbstractValue<N>::addConstant(int val) {

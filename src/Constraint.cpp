@@ -56,7 +56,8 @@ bool AddConstraint::eval(AbstractState& A) {
     AnalyzedValue result; // Starts at bottom (empty set)
 
     // Case 1: Both are explicit sets -> compute exact pairwise additions
-    if (lhs.getKind() == AnalyzedValue::Kind::Set && rhs.getKind() == AnalyzedValue::Kind::Set) {
+    if (lhs.getKind() == AnalyzedValue::Kind::Set &&
+        rhs.getKind() == AnalyzedValue::Kind::Set) {
         // If either set is completely empty (bottom), the result remains bottom
         if (lhs.getValues().empty() || rhs.getValues().empty()) {
             A[variable_name] = result;
@@ -72,7 +73,8 @@ bool AddConstraint::eval(AbstractState& A) {
             }
         }
     } 
-    // Case 2: At least one is a Strided Interval -> compute interval addition hull
+    // Case 2: At least one is a Strided Interval -> compute interval addition
+    // hull
     else {
         // Force evaluation via structural intervals
         // Lower bound addition
@@ -97,9 +99,12 @@ bool AddConstraint::eval(AbstractState& A) {
             new_up.value = lhs.getUpper().value + rhs.getUpper().value;
         }
 
-        // For strides, adding two strided sequences yields a stride of gcd(s1, s2)
-        unsigned s1 = (lhs.getKind() == AnalyzedValue::Kind::StridedInterval) ? lhs.getStride() : 1;
-        unsigned s2 = (rhs.getKind() == AnalyzedValue::Kind::StridedInterval) ? rhs.getStride() : 1;
+        // For strides, adding two strided sequences yields a stride of
+        // gcd(s1, s2)
+        unsigned s1 = (lhs.getKind() == AnalyzedValue::Kind::StridedInterval) ?
+          lhs.getStride() : 1;
+        unsigned s2 = (rhs.getKind() == AnalyzedValue::Kind::StridedInterval) ?
+          rhs.getStride() : 1;
         unsigned new_stride = std::gcd(s1, s2);
 
         result.setAsInterval(new_low, new_up, new_stride); 

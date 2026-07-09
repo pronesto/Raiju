@@ -19,13 +19,22 @@ void Solver::solve() {
 
 void Solver::growthAnalysis() {
   bool changed_evaluating = true;
+  int iteration = 0;
 
   while (changed_evaluating) {
     changed_evaluating = false;
+    std::cout << "\n--- Growth Iteration " << ++iteration << " ---\n";
+
     for (auto &constraint : constraints) {
       if (constraint->eval(this->state)) {
         changed_evaluating = true;
       }
+    }
+
+    // Print the state of your variables. That's just for debugging. We can
+    // remove that later on.
+    for (auto const& [var, val] : state) {
+      std::cout << var << " = " << val << "\n";
     }
   }
 }
