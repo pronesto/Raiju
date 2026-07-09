@@ -70,3 +70,58 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   REQUIRE(state["k2"].getLower().value == 1);
   REQUIRE(state["k2"].getUpper().type == Type::PlusInfinity);
 }
+
+TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bound",
+          "[solver][narrowing]") {
+  // 1. Initialize a clean abstract state table
+  AbstractState state;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type = Bound::Type;
+
+  // 2. Re-instantiate the same system of constraints
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto k0 = std::make_shared<InitializationConstraint>("k0", 0);
+  auto k1 = std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"});
+
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
+
+  Bound ninetyNine;
+  ninetyNine.type = Type::Constant;
+  ninetyNine.value = 99;
+
+  auto kt = std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, ninetyNine);
+  auto k2 = std::make_shared<AddConstraint>("k2", "kt", "const_1");
+
+  Solver solver(state);
+  solver.addConstraint(const_1);
+  solver.addConstraint(k0);
+  solver.addConstraint(k1);
+  solver.addConstraint(kt);
+  solver.addConstraint(k2);
+
+  // 3. Run the FULL solve pipeline (growth Analysis -> future resolution -> narrowing Analysis)
+  solver.solve();
+
+  // 4. Verify that monotonic narrowing successfully refined the intervals
+
+  // k0 remains exactly 0
+  REQUIRE(state["k0"].getLower().value == 0);
+  REQUIRE(state["k0"].getUpper().value == 0);
+
+  // k1's upper bound should narrow down from +inf to 100 [0, 100]
+  REQUIRE(state["k1"].getLower().value == 0);
+  REQUIRE(state["k1"].getUpper().type == Type::Constant);
+  REQUIRE(state["k1"].getUpper().value == 100);
+
+  // kt remains safely clamped between [0, 99]
+  REQUIRE(state["kt"].getLower().value == 0);
+  REQUIRE(state["kt"].getUpper().type == Type::Constant);
+  REQUIRE(state["kt"].getUpper().value == 99);
+
+  // k2 settles at kt's upper bound + 1 [1, 100]
+  REQUIRE(state["k2"].getLower().value == 1);
+  REQUIRE(state["k2"].getUpper().type == Type::Constant);
+  REQUIRE(state["k2"].getUpper().value == 100);
+}
