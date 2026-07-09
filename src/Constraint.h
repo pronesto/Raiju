@@ -31,39 +31,51 @@ public:
      * @return true if the variable_name's value changed, false otherwise.
      */
     virtual bool eval(AbstractState& A) = 0;
-    bool narrow(AbstractState& A, AbstractState& B)
-    {
 
-        AnalyzedValue i_Y = A[this->variable_name];
-        AnalyzedValue e_Y = B[this->variable_name];
-        
-        AnalyzedValue::Bound::Type  minus_inf = AnalyzedValue::Bound::Type::MinusInfinity;
-        AnalyzedValue::Bound::Type  inf = AnalyzedValue::Bound::Type::PlusInfinity; 
+    /**
+     * @brief Refines the abstract value of a variable using a monotonic narrowing operator.
+     * @param A The current abstract state map tracking variable domain evaluations.
+     * @return true if the abstract value was successfully narrowed (shrunk),
+     * false if the domain remained unchanged (indicating a fixed point).
+     */
+    bool narrow(AbstractState& A) {
+      using Bound = AnalyzedValue::Bound;
+      using Type  = Bound::Type;
 
-        AnalyzedValue::Bound new_upper;
-        AnalyzedValue::Bound new_lower;
+      AnalyzedValue oldY = A[variable_name];   // I[Y]
 
-        if(i_Y.getLower().type == minus_inf && e_Y.getLower().type > minus_inf)
-        {
-            new_lower = e_Y.getLower();
-        }else if(i_Y.getUpper().type == inf && e_Y.getUpper().type < inf)
-        {
-            new_upper = e_Y.getUpper();
-        }else if(i_Y.getLower().type > e_Y.getLower().type)
-        {
-            new_lower = e_Y.getLower();
-        }else if(i_Y.getUpper().type < e_Y.getUpper().type)
-        {
-            new_upper = e_Y.getUpper();
-        }
+      A[variable_name] = AnalyzedValue();      // force eval()'s bottom-case branch
+      eval(A);                                 // e(Y)
+      AnalyzedValue eY = A[variable_name];
 
-        if (new_lower.type != i_Y.getLower().type || new_upper.type != i_Y.getUpper().type) {
-            AnalyzedValue av;
-            av.setAsInterval(new_lower, new_upper);
-            A[this->variable_name] = av;
-            return true;
-        }
-        return false;
+      Bound lo = oldY.getLower();
+      Bound hi = oldY.getUpper();
+
+      // 1. Guard 1: I[Y] is -Infinity, and e(Y) has recovered to a finite bound
+      if (oldY.getLower().type == Type::MinusInfinity &&
+          eY.getLower().type  != Type::MinusInfinity) {
+        lo = eY.getLower();
+      }
+      // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
+      else if (oldY.getUpper().type == Type::PlusInfinity &&
+          eY.getUpper().type  != Type::PlusInfinity) {
+        hi = eY.getUpper();
+      }
+      // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower bound -> Narrow!
+      else if (eY.getLower() > oldY.getLower()) {
+        lo = eY.getLower();
+      }
+      // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper bound -> Narrow!
+      else if (eY.getUpper() < oldY.getUpper()) {
+        hi = eY.getUpper();
+      }
+
+      AnalyzedValue result;
+      result.setAsInterval(lo, hi, 1);
+      A[variable_name] = result;
+
+      // Termination relies on this returning false when no further shrinking occurs
+      return result != oldY;
     }
 };
 
