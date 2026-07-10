@@ -30,15 +30,6 @@ private:
   /** @brief Collection of dataflow/SSA constraint equations to execute. */
   std::vector<std::shared_ptr<Constraint>> constraints;
 
-  /**
-   * @brief Resolves symbolic/future boundaries into concrete bounds using
-   * current state data.
-   * * Iterates through the abstract state map, evaluates relational
-   * dependencies between variables (like offset relations), and updates the
-   * bounds dynamically.
-   */
-  void futureResolution();
-
 public:
   /**
    * @brief Constructs a new Solver instance bound to a given abstract state.
@@ -68,6 +59,15 @@ public:
    * bounds upwards until the values stabilize or are forced to infinity.
    */
   void growthAnalysis();
+
+  /**
+   * @brief Resolves symbolic/future boundaries into concrete bounds using
+   * current state data.
+   * * Iterates through the abstract state map, evaluates relational
+   * dependencies between variables (like offset relations), and updates the
+   * bounds dynamically.
+   */
+  void futureResolution();
 
   /**
    * @brief Runs the narrowing analysis loop to reclaim precision loss.

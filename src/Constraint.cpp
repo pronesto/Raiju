@@ -6,6 +6,7 @@
 #include "Constraint.h"
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 // --- Base Constraint ---
 Constraint::Constraint(std::string name) : variable_name(std::move(name)) {}
@@ -162,6 +163,35 @@ IntersectionConstraint::resolveBound(const IntersectionBound &b,
 
   result.value = 0;
   return result;
+}
+
+IntersectionConstraint
+IntersectionConstraint::resolveFutures(const AbstractState &state) const {
+  auto resolve = [&](const IntersectionBound &bound,
+      bool isLower) -> IntersectionBound {
+    if (std::holds_alternative<AnalyzedValue::Bound>(bound))
+      return bound;
+
+    const Future &future = std::get<Future>(bound);
+
+    auto it = state.find(future.target_variable);
+    assert(it != state.end());
+
+    AnalyzedValue::Bound result =
+      isLower ? it->second.getLower()
+      : it->second.getUpper();
+
+    if (result.type == AnalyzedValue::Bound::Type::Constant)
+      result.value += future.offset;
+
+    return result;
+  };
+
+  return IntersectionConstraint(
+      variable_name,
+      operand,
+      resolve(lower_bound, true),
+      resolve(upper_bound, false));
 }
 
 bool IntersectionConstraint::eval(AbstractState &A) {

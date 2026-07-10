@@ -58,15 +58,14 @@ void Solver::narrowingAnalysis() {
 }
 
 void Solver::futureResolution() {
-  /*
-  for (auto &[var_name, val] : state) {
-    // Corrected 'var' to 'val' matching your structured binding reference
-    if (val.hasFutureBound()) {
-      std::string target = val.getFutureTarget();
-      AnalyzedValue targetValue = state[target];
-      AnalyzedValue concrete = targetValue.addOffset(val.getFutureOffset());
-      // TODO: Apply the concrete value back into the state if necessary
-    }
+  for (auto &constraint : constraints) {
+    auto intersection =
+        std::dynamic_pointer_cast<IntersectionConstraint>(constraint);
+
+    if (!intersection)
+      continue;
+
+    constraint = std::make_shared<IntersectionConstraint>(
+        intersection->resolveFutures(state));
   }
-  */
 }

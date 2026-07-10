@@ -171,3 +171,55 @@ TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bou
   REQUIRE(state["k2"].getUpper().type == Type::Constant);
   REQUIRE(state["k2"].getUpper().value == 100);
 }
+
+TEST_CASE("Solver resolves future bounds during solve",
+          "[solver][future-resolution]") {
+
+  AbstractState state;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type  = Bound::Type;
+
+  auto c1    = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto limit = std::make_shared<InitializationConstraint>("limit", 99);
+
+  auto i0 = std::make_shared<InitializationConstraint>("i0", 0);
+
+  auto i1 = std::make_shared<PhiConstraint>(
+      "i1",
+      std::vector<std::string>{"i0", "i2"});
+
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
+
+  auto it = std::make_shared<IntersectionConstraint>(
+      "it",
+      "i1",
+      minusInf,
+      IntersectionConstraint::Future{"limit", 0});
+
+  auto i2 = std::make_shared<AddConstraint>(
+      "i2",
+      "it",
+      "const_1");
+
+  Solver solver(state);
+  solver.addConstraint(c1);
+  solver.addConstraint(limit);
+  solver.addConstraint(i0);
+  solver.addConstraint(i1);
+  solver.addConstraint(it);
+  solver.addConstraint(i2);
+
+  solver.solve();
+
+  REQUIRE(state["limit"].getUpper().value == 99);
+
+  REQUIRE(state["it"].getLower().value == 0);
+  REQUIRE(state["it"].getUpper().type == Type::Constant);
+  REQUIRE(state["it"].getUpper().value == 99);
+
+  REQUIRE(state["i2"].getLower().value == 1);
+  REQUIRE(state["i2"].getUpper().type == Type::Constant);
+  REQUIRE(state["i2"].getUpper().value == 100);
+}

@@ -348,3 +348,103 @@ TEST_CASE("Narrowing reaches a fixed point and returns false",
   REQUIRE(state["y"].getLower().value == 10);
   REQUIRE(state["y"].getUpper().value == 20);
 }
+
+TEST_CASE("Resolve future lower bound",
+          "[constraints][intersect][future]") {
+
+  AbstractState state;
+
+  // x = [10, 20]
+  AnalyzedValue x;
+  AnalyzedValue::Bound ten;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+
+  AnalyzedValue::Bound twenty;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+
+  x.setAsInterval(ten, twenty);
+  state["x"] = x;
+
+  AnalyzedValue::Bound plusInf;
+  plusInf.type = AnalyzedValue::Bound::Type::PlusInfinity;
+
+  IntersectionConstraint::Future future{"x", 3};
+
+  IntersectionConstraint C(
+      "y",
+      "z",
+      future,
+      plusInf);
+
+  auto resolved = C.resolveFutures(state);
+
+  AbstractState dummy;
+
+  AnalyzedValue z;
+  z.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  dummy["z"] = z;
+
+  REQUIRE(resolved.eval(dummy));
+
+  AnalyzedValue expected;
+  expected.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 13},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  REQUIRE(dummy["y"] == expected);
+}
+
+TEST_CASE("Resolve future upper bound",
+          "[constraints][intersect][future]") {
+
+  AbstractState state;
+
+  // x = [10, 20]
+  AnalyzedValue x;
+  AnalyzedValue::Bound ten;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+
+  AnalyzedValue::Bound twenty;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+
+  x.setAsInterval(ten, twenty);
+  state["x"] = x;
+
+  AnalyzedValue::Bound minusInf;
+  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+
+  IntersectionConstraint::Future future{"x", -2};
+
+  IntersectionConstraint C(
+      "y",
+      "z",
+      minusInf,
+      future);
+
+  auto resolved = C.resolveFutures(state);
+
+  AbstractState dummy;
+
+  AnalyzedValue z;
+  z.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  dummy["z"] = z;
+
+  REQUIRE(resolved.eval(dummy));
+
+  AnalyzedValue expected;
+  expected.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 18});
+
+  REQUIRE(dummy["y"] == expected);
+}

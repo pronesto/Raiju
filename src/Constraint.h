@@ -151,6 +151,12 @@ public:
     // Future
     using IntersectionBound = std::variant<AnalyzedValue::Bound, Future>;
 
+    // @brief Replace symbolic bounds with concrete bounds.
+    // @param state The table with abstract states that we will inspect to
+    //   resolve symbolic bounds.
+    IntersectionConstraint resolveFutures(
+      const AbstractState &state) const;
+
 private:
     std::string operand;
     IntersectionBound lower_bound;
