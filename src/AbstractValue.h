@@ -352,6 +352,13 @@ template <unsigned N> void AbstractValue<N>::addConstant(int val) {
     // Insert the new unique constant
     values.insert(it, val);
 
+    // Assign bounds based on the captured set bounds
+    lower.type = Bound::Type::Constant;
+    lower.value = values.front();
+
+    upper.type = Bound::Type::Constant;
+    upper.value = values.back();
+
     // Check if we have exceeded the exact tracking capacity N
     if (values.size() > N) {
       // Collapse the representation into a Strided Interval
@@ -362,13 +369,6 @@ template <unsigned N> void AbstractValue<N>::addConstant(int val) {
       for (size_t i = 1; i < values.size(); ++i) {
         current_gcd = std::gcd(current_gcd, values[i] - base);
       }
-
-      // Assign bounds based on the captured set bounds
-      lower.type = Bound::Type::Constant;
-      lower.value = values.front();
-
-      upper.type = Bound::Type::Constant;
-      upper.value = values.back();
 
       stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
 

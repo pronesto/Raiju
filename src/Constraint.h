@@ -59,15 +59,16 @@ public:
           eY.getLower().type  != Type::MinusInfinity) {
         lo = eY.getLower();
       }
-      // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
-      else if (oldY.getUpper().type == Type::PlusInfinity &&
-          eY.getUpper().type  != Type::PlusInfinity) {
-        hi = eY.getUpper();
-      }
       // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower
       // bound -> Narrow!
       else if (eY.getLower() > oldY.getLower()) {
         lo = eY.getLower();
+      }
+      
+      // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
+      if (oldY.getUpper().type == Type::PlusInfinity &&
+          eY.getUpper().type  != Type::PlusInfinity) {
+        hi = eY.getUpper();
       }
       // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper
       // bound -> Narrow!

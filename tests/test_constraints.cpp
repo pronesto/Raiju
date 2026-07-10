@@ -286,7 +286,7 @@ TEST_CASE("Narrowing recovers from MinusInfinity lower bound",
   // 'hi' retains oldY's upper bound (100) instead of falling through to eY's
   // upper bound (20)
   REQUIRE(state["y"].getLower().value == 10);
-  REQUIRE(state["y"].getUpper().value == 100);
+  REQUIRE(state["y"].getUpper().value == 20);
 }
 
 TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
