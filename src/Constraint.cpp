@@ -47,30 +47,33 @@ ArithmeticConstraint::ArithmeticConstraint(std::string dest, std::string lhs,
                                            std::string rhs)
     : Constraint(std::move(dest)), op1(std::move(lhs)), op2(std::move(rhs)) {}
 
-// --- AddConstraint (v0 = v1 + v2) ---
-bool AddConstraint::eval(AbstractState &A) {
-  AnalyzedValue old_val = A[variable_name];
+bool AddConstraint::eval(AbstractState& A) {
+    AnalyzedValue old_val = A[variable_name];
+    
+    const AnalyzedValue &lhs = A[op1];
+    const AnalyzedValue &rhs = A[op2];
+    
+    AnalyzedValue result; // Starts at bottom (empty set)
 
-  const AnalyzedValue &lhs = A[op1];
-  const AnalyzedValue &rhs = A[op2];
+    // Exact evaluation: finite set × finite set
+    if (lhs.getKind() == AnalyzedValue::Kind::Set &&
+        rhs.getKind() == AnalyzedValue::Kind::Set) {
 
-  AnalyzedValue result;
+        // Bottom propagates.
+        if (lhs.getValues().empty() || rhs.getValues().empty()) {
+            A[variable_name] = result;
+            return old_val != result;
+        }
 
-  // Exact evaluation: finite set × finite set
-  if (lhs.getKind() == AnalyzedValue::Kind::Set &&
-      rhs.getKind() == AnalyzedValue::Kind::Set) {
+        std::vector<int> consts;
 
-    // Bottom propagates.
-    if (lhs.getValues().empty() || rhs.getValues().empty()) {
-      A[variable_name] = result;
-      return old_val != result;
-    }
+        for (int l : lhs.getValues()) {
+            for (int r : rhs.getValues()) {
+                consts.emplace_back(l + r);
+            }
+        }
 
-    for (int l : lhs.getValues()) {
-      for (int r : rhs.getValues()) {
-        result.addConstant(l + r);
-      }
-    }
+        result.addConstants(consts);
 
     A[variable_name] = result;
     return old_val != result;
@@ -80,7 +83,7 @@ bool AddConstraint::eval(AbstractState &A) {
   auto getLower = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
       return {AnalyzedValue::Bound::Type::Constant,
-              v.getValues().front()};
+              *v.getValues().begin()};
     }
     return v.getLower();
   };
@@ -88,7 +91,7 @@ bool AddConstraint::eval(AbstractState &A) {
   auto getUpper = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
       return {AnalyzedValue::Bound::Type::Constant,
-              v.getValues().back()};
+              *v.getValues().rbegin()};
     }
     return v.getUpper();
   };

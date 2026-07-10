@@ -98,7 +98,7 @@ TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
 
   // k0 remains constant.
   REQUIRE(state["k0"].getKind() == AnalyzedValue::Kind::Set);
-  REQUIRE(state["k0"].getValues() == std::vector<int>{0});
+  REQUIRE(state["k0"].getValues() == std::set<int>{0});
 
   // k1 widens to [0,+inf].
   REQUIRE(state["k1"].getKind() == AnalyzedValue::Kind::StridedInterval);

@@ -64,7 +64,7 @@ public:
       else if (eY.getLower() > oldY.getLower()) {
         lo = eY.getLower();
       }
-      
+
       // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
       if (oldY.getUpper().type == Type::PlusInfinity &&
           eY.getUpper().type  != Type::PlusInfinity) {
@@ -83,6 +83,7 @@ public:
       // Termination relies on this returning false when no further shrinking
       // occurs
       return result != oldY;
+
     }
 };
 

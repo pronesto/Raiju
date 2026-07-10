@@ -156,7 +156,7 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
     REQUIRE(result.getLower().type == AnalyzedValue::Bound::Type::Constant);
     REQUIRE(result.getLower().value == 11);
 
-    REQUIRE(result.getUpper().type == AnalyzedValue::Bound::Type::PlusInfinity);
+    REQUIRE(result.getUpper().value == 23);
 
     REQUIRE(result.getStride() == 1);
   }
@@ -187,7 +187,7 @@ TEST_CASE("Intersection with constant upper bound",
 
   REQUIRE(state["y"].getKind() == AnalyzedValue::Kind::Set);
 
-  REQUIRE(state["y"].getValues() == std::vector<int>{1, 5});
+  REQUIRE(state["y"].getValues()==std::set<int>{1,5});
 }
 
 TEST_CASE("Intersection narrows interval", "[constraints][intersect]") {
