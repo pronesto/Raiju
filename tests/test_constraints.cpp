@@ -1,244 +1,450 @@
-#include <catch2/catch_test_macros.hpp>
 #include "Constraint.h"
+#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Constraints - InitializationConstraint Behavior", "[constraints]") {
-    AbstractState state;
+  AbstractState state;
 
-    // A variable not yet initialized acts as an empty set (the bottom element)
-    // inside a fresh std::unordered_map lookup.
+  // A variable not yet initialized acts as an empty set (the bottom element)
+  // inside a fresh std::unordered_map lookup.
+  REQUIRE(state["x0"].getKind() == AnalyzedValue::Kind::Set);
+
+  // Bind x0 = 42
+  InitializationConstraint init_x0("x0", 42);
+
+  SECTION("First evaluation updates the state and returns true") {
+    bool changed = init_x0.eval(state);
+
+    REQUIRE(changed == true);
     REQUIRE(state["x0"].getKind() == AnalyzedValue::Kind::Set);
 
-    // Bind x0 = 42
-    InitializationConstraint init_x0("x0", 42);
+    // Running a quick self-join test to prove 42 is tracked inside the set
+    AnalyzedValue expected;
+    expected.addConstant(42);
+    REQUIRE(state["x0"] == expected);
+  }
 
-    SECTION("First evaluation updates the state and returns true") {
-        bool changed = init_x0.eval(state);
-        
-        REQUIRE(changed == true);
-        REQUIRE(state["x0"].getKind() == AnalyzedValue::Kind::Set);
-        
-        // Running a quick self-join test to prove 42 is tracked inside the set
-        AnalyzedValue expected;
-        expected.addConstant(42);
-        REQUIRE(state["x0"] == expected);
-    }
+  SECTION("Subsequent evaluations return false if the value hasn't changed") {
+    init_x0.eval(state); // First run (changes state)
 
-    SECTION("Subsequent evaluations return false if the value hasn't changed") {
-        init_x0.eval(state); // First run (changes state)
-        
-        bool changed_again = init_x0.eval(state); // Second run
-        REQUIRE(changed_again == false);
-    }
+    bool changed_again = init_x0.eval(state); // Second run
+    REQUIRE(changed_again == false);
+  }
 }
 
 TEST_CASE("Constraints - PhiConstraint Behavior", "[constraints]") {
-    AbstractState state;
+  AbstractState state;
 
-    // Set up mock incoming variables for an SSA merge:
-    // x1 = {3}, x2 = {5}
-    InitializationConstraint init_x1("x1", 3);
-    InitializationConstraint init_x2("x2", 5);
-    init_x1.eval(state);
-    init_x2.eval(state);
+  // Set up mock incoming variables for an SSA merge:
+  // x1 = {3}, x2 = {5}
+  InitializationConstraint init_x1("x1", 3);
+  InitializationConstraint init_x2("x2", 5);
+  init_x1.eval(state);
+  init_x2.eval(state);
 
-    // x0 = phi(x1, x2)
-    PhiConstraint phi_x0("x0", {"x1", "x2"});
+  // x0 = phi(x1, x2)
+  PhiConstraint phi_x0("x0", {"x1", "x2"});
 
-    SECTION("Phi constraint successfully joins multiple operands") {
-        bool changed = phi_x0.eval(state);
-        
-        REQUIRE(changed == true);
-        REQUIRE(state["x0"].getKind() == AnalyzedValue::Kind::Set);
+  SECTION("Phi constraint successfully joins multiple operands") {
+    bool changed = phi_x0.eval(state);
 
-        // Expect x0 to hold the union {3, 5}
-        AnalyzedValue expected;
-        expected.addConstant(3);
-        expected.addConstant(5);
-        REQUIRE(state["x0"] == expected);
-    }
+    REQUIRE(changed == true);
+    REQUIRE(state["x0"].getKind() == AnalyzedValue::Kind::Set);
 
-    SECTION("Phi constraint forces collapse into StridedInterval if combined capacity > N") {
-        // Let's force-add unique constants to overflow the threshold (N = 4)
-        InitializationConstraint init_a("a", 10);
-        InitializationConstraint init_b("b", 20);
-        InitializationConstraint init_c("c", 30);
-        InitializationConstraint init_d("d", 40);
-        InitializationConstraint init_e("e", 50);
-        
-        init_a.eval(state);
-        init_b.eval(state);
-        init_c.eval(state);
-        init_d.eval(state);
-        init_e.eval(state);
+    // Expect x0 to hold the union {3, 5}
+    AnalyzedValue expected;
+    expected.addConstant(3);
+    expected.addConstant(5);
+    REQUIRE(state["x0"] == expected);
+  }
 
-        // phi_overflow = phi(a, b, c, d, e) -> total 5 elements, triggers collapse
-        PhiConstraint phi_overflow("phi_overflow", {"a", "b", "c", "d", "e"});
-        
-        phi_overflow.eval(state);
-        REQUIRE(state["phi_overflow"].getKind() == AnalyzedValue::Kind::StridedInterval);
-    }
+  SECTION("Phi constraint forces collapse into StridedInterval if combined "
+          "capacity > N") {
+    // Let's force-add unique constants to overflow the threshold (N = 4)
+    InitializationConstraint init_a("a", 10);
+    InitializationConstraint init_b("b", 20);
+    InitializationConstraint init_c("c", 30);
+    InitializationConstraint init_d("d", 40);
+    InitializationConstraint init_e("e", 50);
+
+    init_a.eval(state);
+    init_b.eval(state);
+    init_c.eval(state);
+    init_d.eval(state);
+    init_e.eval(state);
+
+    // phi_overflow = phi(a, b, c, d, e) -> total 5 elements, triggers collapse
+    PhiConstraint phi_overflow("phi_overflow", {"a", "b", "c", "d", "e"});
+
+    phi_overflow.eval(state);
+    REQUIRE(state["phi_overflow"].getKind() ==
+            AnalyzedValue::Kind::StridedInterval);
+  }
 }
 
-#include <catch2/catch_test_macros.hpp>
 #include "Constraint.h"
+#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Constraints - AddConstraint Pairwise Sets", "[constraints][add]") {
-    AbstractState state;
+  AbstractState state;
 
-    // v1 = {2, 3}
-    InitializationConstraint init_v1_a("v1", 2);
-    init_v1_a.eval(state);
-    // Since addConstant or join isn't directly exposed in Constraint,
-    // let's simulate a set by using a Phi style layout or a mock update.
-    // For test isolation, we'll manually push data into the map or use a custom tool.
-    // But since state is an unordered_map, we can populate it directly in the test!
+  // v1 = {2, 3}
+  InitializationConstraint init_v1_a("v1", 2);
+  init_v1_a.eval(state);
+  // Since addConstant or join isn't directly exposed in Constraint,
+  // let's simulate a set by using a Phi style layout or a mock update.
+  // For test isolation, we'll manually push data into the map or use a custom
+  // tool. But since state is an unordered_map, we can populate it directly in
+  // the test!
 
-    AnalyzedValue v1;
-    v1.addConstant(2);
-    v1.addConstant(3);
-    state["v1"] = v1;
+  AnalyzedValue v1;
+  v1.addConstant(2);
+  v1.addConstant(3);
+  state["v1"] = v1;
 
-    // v2 = {10, 20}
-    AnalyzedValue v2;
-    v2.addConstant(10);
-    v2.addConstant(20);
-    state["v2"] = v2;
+  // v2 = {10, 20}
+  AnalyzedValue v2;
+  v2.addConstant(10);
+  v2.addConstant(20);
+  state["v2"] = v2;
 
-    // v0 = v1 + v2
-    AddConstraint add_v0("v0", "v1", "v2");
+  // v0 = v1 + v2
+  AddConstraint add_v0("v0", "v1", "v2");
 
-    SECTION("Exact pairwise addition for sets under capacity") {
-        bool changed = add_v0.eval(state);
+  SECTION("Exact pairwise addition for sets under capacity") {
+    bool changed = add_v0.eval(state);
 
-        REQUIRE(changed == true);
-        REQUIRE(state["v0"].getKind() == AnalyzedValue::Kind::Set);
+    REQUIRE(changed == true);
+    REQUIRE(state["v0"].getKind() == AnalyzedValue::Kind::Set);
 
-        // Expected unique combinations: 2+10=12, 2+20=22, 3+10=13, 3+20=23
-        // Sorted: {12, 13, 22, 23} (Total size 4, which is <= N=4)
-        AnalyzedValue expected;
-        expected.addConstant(12);
-        expected.addConstant(13);
-        expected.addConstant(22);
-        expected.addConstant(23);
+    // Expected unique combinations: 2+10=12, 2+20=22, 3+10=13, 3+20=23
+    // Sorted: {12, 13, 22, 23} (Total size 4, which is <= N=4)
+    AnalyzedValue expected;
+    expected.addConstant(12);
+    expected.addConstant(13);
+    expected.addConstant(22);
+    expected.addConstant(23);
 
-        REQUIRE(state["v0"] == expected);
-    }
+    REQUIRE(state["v0"] == expected);
+  }
 }
 
-TEST_CASE("Constraints - AddConstraint Overflow and Interval Math", "[constraints][add]") {
-    AbstractState state;
+TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
+          "[constraints][add]") {
+  AbstractState state;
 
-    AnalyzedValue v1;
-    v1.addConstant(1);
-    v1.addConstant(2);
-    v1.addConstant(3);
-    state["v1"] = v1;
+  AnalyzedValue v1;
+  v1.addConstant(1);
+  v1.addConstant(2);
+  v1.addConstant(3);
+  state["v1"] = v1;
 
-    AnalyzedValue v2;
-    v2.addConstant(10);
-    v2.addConstant(20);
-    state["v2"] = v2;
+  AnalyzedValue v2;
+  v2.addConstant(10);
+  v2.addConstant(20);
+  state["v2"] = v2;
 
-    AddConstraint add_v0("v0", "v1", "v2");
+  AddConstraint add_v0("v0", "v1", "v2");
 
-    SECTION("Addition widens after the finite-set capacity is exceeded") {
+  SECTION("Addition widens after the finite-set capacity is exceeded") {
 
-        REQUIRE(add_v0.eval(state));
+    REQUIRE(add_v0.eval(state));
 
-        const auto& result = state["v0"];
+    const auto &result = state["v0"];
 
-        REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
+    REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
 
-        REQUIRE(result.getLower().type ==
-                AnalyzedValue::Bound::Type::Constant);
-        REQUIRE(result.getLower().value == 11);
+    REQUIRE(result.getLower().type == AnalyzedValue::Bound::Type::Constant);
+    REQUIRE(result.getLower().value == 11);
 
-        REQUIRE(result.getUpper().value == 23);
+    REQUIRE(result.getUpper().value == 23);
 
-        REQUIRE(result.getStride() == 1);
-    }
+    REQUIRE(result.getStride() == 1);
+  }
 }
 
-TEST_CASE("Intersection with constant upper bound", "[constraints][intersect]") {
+TEST_CASE("Intersection with constant upper bound",
+          "[constraints][intersect]") {
 
-    AbstractState state;
+  AbstractState state;
 
-    AnalyzedValue v;
-    v.addConstant(1);
-    v.addConstant(5);
-    v.addConstant(10);
+  AnalyzedValue v;
+  v.addConstant(1);
+  v.addConstant(5);
+  v.addConstant(10);
 
-    state["x"] = v;
+  state["x"] = v;
 
-    AnalyzedValue::Bound minusInf;
-    minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  AnalyzedValue::Bound minusInf;
+  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
 
-    AnalyzedValue::Bound five;
-    five.type = AnalyzedValue::Bound::Type::Constant;
-    five.value = 5;
+  AnalyzedValue::Bound five;
+  five.type = AnalyzedValue::Bound::Type::Constant;
+  five.value = 5;
 
-    IntersectionConstraint C("y","x",minusInf,five);
+  IntersectionConstraint C("y", "x", minusInf, five);
 
-    REQUIRE(C.eval(state));
+  REQUIRE(C.eval(state));
 
-    REQUIRE(state["y"].getKind()==AnalyzedValue::Kind::Set);
+  REQUIRE(state["y"].getKind() == AnalyzedValue::Kind::Set);
 
-    REQUIRE(state["y"].getValues()==std::set<int>{1,5});
+  REQUIRE(state["y"].getValues()==std::set<int>{1,5});
 }
 
 TEST_CASE("Intersection narrows interval", "[constraints][intersect]") {
 
-    AbstractState state;
+  AbstractState state;
 
-    AnalyzedValue x;
+  AnalyzedValue x;
 
-    AnalyzedValue::Bound low;
-    low.type=AnalyzedValue::Bound::Type::Constant;
-    low.value=0;
+  AnalyzedValue::Bound low;
+  low.type = AnalyzedValue::Bound::Type::Constant;
+  low.value = 0;
 
-    AnalyzedValue::Bound up;
-    up.type=AnalyzedValue::Bound::Type::Constant;
-    up.value=100;
+  AnalyzedValue::Bound up;
+  up.type = AnalyzedValue::Bound::Type::Constant;
+  up.value = 100;
 
-    x.setAsInterval(low,up,1);
+  x.setAsInterval(low, up, 1);
 
-    state["x"]=x;
+  state["x"] = x;
 
-    AnalyzedValue::Bound ten;
-    ten.type=AnalyzedValue::Bound::Type::Constant;
-    ten.value=10;
+  AnalyzedValue::Bound ten;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
 
-    AnalyzedValue::Bound twenty;
-    twenty.type=AnalyzedValue::Bound::Type::Constant;
-    twenty.value=20;
+  AnalyzedValue::Bound twenty;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
 
-    IntersectionConstraint C("y","x",ten,twenty);
+  IntersectionConstraint C("y", "x", ten, twenty);
 
-    REQUIRE(C.eval(state));
+  REQUIRE(C.eval(state));
 
-    REQUIRE(state["y"].getLower().value==10);
-    REQUIRE(state["y"].getUpper().value==20);
+  REQUIRE(state["y"].getLower().value == 10);
+  REQUIRE(state["y"].getUpper().value == 20);
 }
 
 TEST_CASE("Growth phase ignores futures", "[constraints][intersect]") {
 
-    AbstractState state;
+  AbstractState state;
 
-    AnalyzedValue x;
-    x.addConstant(1);
-    x.addConstant(5);
-    x.addConstant(10);
+  AnalyzedValue x;
+  x.addConstant(1);
+  x.addConstant(5);
+  x.addConstant(10);
 
-    state["x"]=x;
+  state["x"] = x;
 
-    IntersectionConstraint::Future F{"y", -1};
+  IntersectionConstraint::Future F{"y", -1};
 
-    AnalyzedValue::Bound minusInf;
-    minusInf.type=AnalyzedValue::Bound::Type::MinusInfinity;
+  AnalyzedValue::Bound minusInf;
+  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
 
-    IntersectionConstraint C("z", "x", minusInf, F);
+  IntersectionConstraint C("z", "x", minusInf, F);
 
-    REQUIRE(C.eval(state));
+  REQUIRE(C.eval(state));
 
-    REQUIRE(state["z"]==state["x"]);
+  REQUIRE(state["z"] == state["x"]);
+}
+
+TEST_CASE("Narrowing recovers from MinusInfinity lower bound",
+          "[constraints][narrow]") {
+  AbstractState state;
+
+  // Set up operand x = [0, 50]
+  AnalyzedValue x;
+  AnalyzedValue::Bound zero, fifty;
+  zero.type = AnalyzedValue::Bound::Type::Constant;
+  zero.value = 0;
+  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  fifty.value = 50;
+  x.setAsInterval(zero, fifty, 1);
+  state["x"] = x;
+
+  // Set up destination y old state = [-Infinity, 100]
+  AnalyzedValue y_old;
+  AnalyzedValue::Bound minusInf, hundred;
+  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  hundred.value = 100;
+  y_old.setAsInterval(minusInf, hundred, 1);
+  state["y"] = y_old;
+
+  // Constraint: y = x intersection [10, 20] -> eval(state) will yield [10, 20]
+  AnalyzedValue::Bound ten, twenty;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+  IntersectionConstraint C("y", "x", ten, twenty);
+
+  // Call narrow: should return true because the lower bound shrinks from -Inf
+  // to 10
+  REQUIRE(C.narrow(state));
+
+  // Guard 1 updates 'lo' to 10, but because of the 'else if' ladder,
+  // 'hi' retains oldY's upper bound (100) instead of falling through to eY's
+  // upper bound (20)
+  REQUIRE(state["y"].getLower().value == 10);
+  REQUIRE(state["y"].getUpper().value == 20);
+}
+
+TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
+  AbstractState state;
+
+  // Set up operand x = [0, 100]
+  AnalyzedValue x;
+  AnalyzedValue::Bound zero, hundred;
+  zero.type = AnalyzedValue::Bound::Type::Constant;
+  zero.value = 0;
+  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  hundred.value = 100;
+  x.setAsInterval(zero, hundred, 1);
+  state["x"] = x;
+
+  // Set up destination y old state = [0, 100]
+  AnalyzedValue y_old = x;
+  state["y"] = y_old;
+
+  // Constraint: y = x intersection [0, 50] -> eval(state) yields [0, 50]
+  // Lower bounds match (0 == 0), but upper bound shrinks (50 < 100)
+  AnalyzedValue::Bound fifty;
+  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  fifty.value = 50;
+  IntersectionConstraint C("y", "x", zero, fifty);
+
+  // Should narrow successfully
+  REQUIRE(C.narrow(state));
+
+  // Lower bound stays 0, upper bound is narrowed to 50
+  REQUIRE(state["y"].getLower().value == 0);
+  REQUIRE(state["y"].getUpper().value == 50);
+}
+
+TEST_CASE("Narrowing reaches a fixed point and returns false",
+          "[constraints][narrow]") {
+  AbstractState state;
+
+  // Set up operand x = [10, 20]
+  AnalyzedValue x;
+  AnalyzedValue::Bound ten, twenty;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+  x.setAsInterval(ten, twenty, 1);
+  state["x"] = x;
+
+  // Set up destination y old state = [10, 20]
+  state["y"] = x;
+
+  // Constraint: y = x intersection [10, 20] -> eval(state) yields [10, 20]
+  IntersectionConstraint C("y", "x", ten, twenty);
+
+  // No shrinking happens; should return false to signal a fixed point
+  REQUIRE_FALSE(C.narrow(state));
+
+  // Ensure state values are untouched
+  REQUIRE(state["y"].getLower().value == 10);
+  REQUIRE(state["y"].getUpper().value == 20);
+}
+
+TEST_CASE("Resolve future lower bound",
+          "[constraints][intersect][future]") {
+
+  AbstractState state;
+
+  // x = [10, 20]
+  AnalyzedValue x;
+  AnalyzedValue::Bound ten;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+
+  AnalyzedValue::Bound twenty;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+
+  x.setAsInterval(ten, twenty);
+  state["x"] = x;
+
+  AnalyzedValue::Bound plusInf;
+  plusInf.type = AnalyzedValue::Bound::Type::PlusInfinity;
+
+  IntersectionConstraint::Future future{"x", 3};
+
+  IntersectionConstraint C(
+      "y",
+      "z",
+      future,
+      plusInf);
+
+  auto resolved = C.resolveFutures(state);
+
+  AbstractState dummy;
+
+  AnalyzedValue z;
+  z.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  dummy["z"] = z;
+
+  REQUIRE(resolved.eval(dummy));
+
+  AnalyzedValue expected;
+  expected.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 13},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  REQUIRE(dummy["y"] == expected);
+}
+
+TEST_CASE("Resolve future upper bound",
+          "[constraints][intersect][future]") {
+
+  AbstractState state;
+
+  // x = [10, 20]
+  AnalyzedValue x;
+  AnalyzedValue::Bound ten;
+  ten.type = AnalyzedValue::Bound::Type::Constant;
+  ten.value = 10;
+
+  AnalyzedValue::Bound twenty;
+  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.value = 20;
+
+  x.setAsInterval(ten, twenty);
+  state["x"] = x;
+
+  AnalyzedValue::Bound minusInf;
+  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+
+  IntersectionConstraint::Future future{"x", -2};
+
+  IntersectionConstraint C(
+      "y",
+      "z",
+      minusInf,
+      future);
+
+  auto resolved = C.resolveFutures(state);
+
+  AbstractState dummy;
+
+  AnalyzedValue z;
+  z.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+
+  dummy["z"] = z;
+
+  REQUIRE(resolved.eval(dummy));
+
+  AnalyzedValue expected;
+  expected.setAsInterval(
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
+      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 18});
+
+  REQUIRE(dummy["y"] == expected);
 }
