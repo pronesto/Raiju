@@ -327,3 +327,121 @@ TEST_CASE("Solver handles mutually recursive future bounds",
   REQUIRE(state["j2"].getUpper().value ==
           state["jt"].getUpper().value - 1);
 }
+
+TEST_CASE("Solver handles complete running example",
+          "[solver][growth][future-resolution][narrowing]") {
+  // 1. Initialize a clean abstract state table
+  AbstractState state;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type = Bound::Type;
+
+  // 2. Re-instantiate the same system of constraints
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto minus_1 = std::make_shared<InitializationConstraint>("minus_1", -1);
+
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
+
+  Bound plusInf;
+  plusInf.type = Type::PlusInfinity;
+
+  Bound ninetyNine;
+  ninetyNine.type = Type::Constant;
+  ninetyNine.value = 99;
+
+  Bound hundred;
+  hundred.type = Type::Constant;
+  hundred.value = 100;
+
+
+  auto k0 = std::make_shared<InitializationConstraint>("k0", 0);
+  auto kt = std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, ninetyNine);
+  auto kf = std::make_shared<IntersectionConstraint>("kf", "k1", hundred, plusInf);
+  auto k1 = std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"});
+
+  auto i0 = std::make_shared<InitializationConstraint>("i0", 0);
+  auto j0 = std::make_shared<IntersectionConstraint>("j0", "kt", minusInf, plusInf);
+
+  auto i1 = std::make_shared<PhiConstraint>("i1", std::vector<std::string>{"i0", "i2"});
+  auto j1 = std::make_shared<PhiConstraint>("j1", std::vector<std::string>{"j0", "j2"});
+
+  // it = i1 ∩ [-inf, ft(j1)-1]
+  auto it = std::make_shared<IntersectionConstraint>(
+      "it",
+      "i1",
+      minusInf,
+      IntersectionConstraint::Future{"j1", -1});
+
+  // jt = j1 ∩ [ft(i1)+1, +inf]
+  auto jt = std::make_shared<IntersectionConstraint>(
+      "jt",
+      "j1",
+      IntersectionConstraint::Future{"i1", 1},
+      plusInf);
+  
+  auto i2 = std::make_shared<AddConstraint>("i2", "it", "const_1");
+  auto j2 = std::make_shared<AddConstraint>("j2", "jt", "minus_1");
+  auto k2 = std::make_shared<AddConstraint>("k2", "kt", "const_1");
+
+  Solver solver(state);
+
+  solver.addConstraint(minus_1);
+  solver.addConstraint(const_1);
+  solver.addConstraint(k0);
+  solver.addConstraint(kt);
+  solver.addConstraint(kf);
+  solver.addConstraint(k1);
+  solver.addConstraint(i0);
+  solver.addConstraint(j0);
+  solver.addConstraint(i1);
+  solver.addConstraint(j1);
+  solver.addConstraint(it);
+  solver.addConstraint(jt);
+  solver.addConstraint(i2);
+  solver.addConstraint(j2);
+  solver.addConstraint(k2);
+
+  solver.solve();
+
+  // Check values
+
+  REQUIRE(state["i0"].getLower().value == 0);
+  REQUIRE(state["i0"].getUpper().value == 0);
+
+  REQUIRE(state["i1"].getLower().value == 0);
+  REQUIRE(state["i1"].getUpper().value == 99);
+
+  REQUIRE(state["i2"].getLower().value == 1);
+  REQUIRE(state["i2"].getUpper().value == 99);
+
+  REQUIRE(state["it"].getLower().value == 0);
+  REQUIRE(state["it"].getUpper().value == 98);
+
+  REQUIRE(state["j0"].getLower().value == 0);
+  REQUIRE(state["j0"].getUpper().value == 99);
+
+  REQUIRE(state["j1"].getLower().value == -1);
+  REQUIRE(state["j1"].getUpper().value == 99);
+
+  REQUIRE(state["j2"].getLower().value == -1);
+  REQUIRE(state["j2"].getUpper().value == 98);
+
+  REQUIRE(state["jt"].getLower().value == 0);
+  REQUIRE(state["jt"].getUpper().value == 99);
+
+  REQUIRE(state["k0"].getLower().value == 0);
+  REQUIRE(state["k0"].getUpper().value == 0);
+
+  REQUIRE(state["k1"].getLower().value == 0);
+  REQUIRE(state["k1"].getUpper().value == 100);
+
+  REQUIRE(state["k2"].getLower().value == 1);
+  REQUIRE(state["k2"].getUpper().value == 100);
+
+  REQUIRE(state["kt"].getLower().value == 0);
+  REQUIRE(state["kt"].getUpper().value == 99);
+
+  REQUIRE(state["kf"].getLower().value == 100);
+  REQUIRE(state["kf"].getUpper().value == 100);
+}
