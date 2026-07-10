@@ -11,10 +11,24 @@ void Solver::addConstraint(std::shared_ptr<Constraint> constraint) {
   constraints.push_back(constraint);
 }
 
-void Solver::solve() {
+void Solver::clear(){
+   constraints.clear();
+}
+
+void Solver::resolveSCC() {
   growthAnalysis();
   futureResolution();
   narrowingAnalysis();
+  clear();
+}
+
+void Solver::solve(std::vector<std::vector<std::shared_ptr<Constraint>>>& sccs) {
+   for (auto &scc : sccs) {
+      for (auto &constraint : scc) {
+         addConstraint(constraint);
+      }
+      resolveSCC();
+   }
 }
 
 void Solver::growthAnalysis() {
