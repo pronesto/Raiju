@@ -5,6 +5,7 @@
 
 #include "Constraint.h"
 #include "Solver.h"
+#include "Graph.h"
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
@@ -148,7 +149,7 @@ TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bou
   solver.addConstraint(k2);
 
   // 3. Run the FULL solve pipeline (growth Analysis -> future resolution -> narrowing Analysis)
-  solver.solve();
+  solver.resolveSCC();
 
   // 4. Verify that monotonic narrowing successfully refined the intervals
 
@@ -211,7 +212,7 @@ TEST_CASE("Solver resolves future bounds during solve",
   solver.addConstraint(it);
   solver.addConstraint(i2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   REQUIRE(state["limit"].getUpper().value == 99);
 
@@ -289,7 +290,7 @@ TEST_CASE("Solver handles mutually recursive future bounds",
   solver.addConstraint(i2);
   solver.addConstraint(j2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   // Initial values remain unchanged.
   REQUIRE(state["i0"].getLower().value == 0);
@@ -402,7 +403,7 @@ TEST_CASE("Solver handles complete running example",
   solver.addConstraint(j2);
   solver.addConstraint(k2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   // Check values
 
@@ -442,6 +443,89 @@ TEST_CASE("Solver handles complete running example",
   REQUIRE(state["kt"].getLower().value == 0);
   REQUIRE(state["kt"].getUpper().value == 99);
 
+  REQUIRE(state["kf"].getLower().value == 100);
+  REQUIRE(state["kf"].getUpper().value == 100);
+}
+
+TEST_CASE("Solver and ConstraintGraph Integration: Complete Running Example",
+          "[solver][graph][integration]") {
+  
+  AbstractState state;
+  ConstraintGraph graph;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type = Bound::Type;
+
+  Bound minusInf; minusInf.type = Type::MinusInfinity;
+  Bound plusInf; plusInf.type = Type::PlusInfinity;
+  Bound b_99; b_99.type = Type::Constant; b_99.value = 99;
+  Bound b_100; b_100.type = Type::Constant; b_100.value = 100;
+
+  // Utilitários 
+  graph.addConstraint(std::make_shared<InitializationConstraint>("c_1", 1));
+  graph.addConstraint(std::make_shared<InitializationConstraint>("c_minus_1", -1));
+
+  // Loop de K
+  graph.addConstraint(std::make_shared<InitializationConstraint>("k0", 0));
+  graph.addConstraint(std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, b_99));
+  graph.addConstraint(std::make_shared<IntersectionConstraint>("kf", "k1", b_100, plusInf));
+  graph.addConstraint(std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"}));
+  graph.addConstraint(std::make_shared<AddConstraint>("k2", "kt", "c_1"));
+
+  // Inicialização de I e J
+  graph.addConstraint(std::make_shared<InitializationConstraint>("i0", 0));
+  graph.addConstraint(std::make_shared<PhiConstraint>("j0", std::vector<std::string>{"kt"}));
+
+  // Loops mutuamente recursivos de I e J
+  graph.addConstraint(std::make_shared<PhiConstraint>("i1", std::vector<std::string>{"i0", "i2"}));
+  graph.addConstraint(std::make_shared<PhiConstraint>("j1", std::vector<std::string>{"j0", "j2"}));
+
+  graph.addConstraint(std::make_shared<IntersectionConstraint>(
+      "it", "i1", minusInf, IntersectionConstraint::Future{"j1", -1}));
+      
+  graph.addConstraint(std::make_shared<IntersectionConstraint>(
+      "jt", "j1", IntersectionConstraint::Future{"i1", 0}, plusInf));
+
+  graph.addConstraint(std::make_shared<AddConstraint>("i2", "it", "c_1"));
+  graph.addConstraint(std::make_shared<AddConstraint>("j2", "jt", "c_minus_1"));
+
+  // ==========================================
+  // O teste real da sua arquitetura:
+  // ==========================================
+  auto sccs = graph.getTopologicalSCCs();
+  
+  Solver solver(state);
+  solver.solve(sccs);
+
+  // ==========================================
+  // Verificação matemática
+  // ==========================================
+  REQUIRE(state["i0"].getLower().value == 0);
+  REQUIRE(state["i0"].getUpper().value == 0);
+  REQUIRE(state["i1"].getLower().value == 0);
+  REQUIRE(state["i1"].getUpper().value == 99);
+  REQUIRE(state["i2"].getLower().value == 1);
+  REQUIRE(state["i2"].getUpper().value == 99);
+  REQUIRE(state["it"].getLower().value == 0);
+  REQUIRE(state["it"].getUpper().value == 98);
+
+  REQUIRE(state["j0"].getLower().value == 0);
+  REQUIRE(state["j0"].getUpper().value == 99);
+  REQUIRE(state["j1"].getLower().value == -1);
+  REQUIRE(state["j1"].getUpper().value == 99);
+  REQUIRE(state["j2"].getLower().value == -1);
+  REQUIRE(state["j2"].getUpper().value == 98);
+  REQUIRE(state["jt"].getLower().value == 0);
+  REQUIRE(state["jt"].getUpper().value == 99);
+
+  REQUIRE(state["k0"].getLower().value == 0);
+  REQUIRE(state["k0"].getUpper().value == 0);
+  REQUIRE(state["k1"].getLower().value == 0);
+  REQUIRE(state["k1"].getUpper().value == 100);
+  REQUIRE(state["k2"].getLower().value == 1);
+  REQUIRE(state["k2"].getUpper().value == 100);
+  REQUIRE(state["kt"].getLower().value == 0);
+  REQUIRE(state["kt"].getUpper().value == 99);
   REQUIRE(state["kf"].getLower().value == 100);
   REQUIRE(state["kf"].getUpper().value == 100);
 }
