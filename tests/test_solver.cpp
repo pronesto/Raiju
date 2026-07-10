@@ -223,3 +223,107 @@ TEST_CASE("Solver resolves future bounds during solve",
   REQUIRE(state["i2"].getUpper().type == Type::Constant);
   REQUIRE(state["i2"].getUpper().value == 100);
 }
+
+TEST_CASE("Solver handles mutually recursive future bounds",
+          "[solver][future-resolution][mutual]") {
+  // 1. Initialize a clean abstract state table
+  AbstractState state;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type  = Bound::Type;
+
+  // Constants
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto minus_1 =
+    std::make_shared<InitializationConstraint>("minus_1", -1);
+
+  // Initial values
+  auto i0 = std::make_shared<InitializationConstraint>("i0", 0);
+  auto j0 = std::make_shared<InitializationConstraint>("j0", 99);
+
+  // Phi nodes
+  auto i1 = std::make_shared<PhiConstraint>(
+      "i1", std::vector<std::string>{"i0", "i2"});
+
+  auto j1 = std::make_shared<PhiConstraint>(
+      "j1", std::vector<std::string>{"j0", "j2"});
+
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
+
+  Bound plusInf;
+  plusInf.type = Type::PlusInfinity;
+
+  // it = i1 ∩ [-inf, ft(j1)-1]
+  auto it = std::make_shared<IntersectionConstraint>(
+      "it",
+      "i1",
+      minusInf,
+      IntersectionConstraint::Future{"j1", -1});
+
+  // jt = j1 ∩ [ft(i1)+1, +inf]
+  auto jt = std::make_shared<IntersectionConstraint>(
+      "jt",
+      "j1",
+      IntersectionConstraint::Future{"i1", 1},
+      plusInf);
+
+  // i2 = it + 1
+  auto i2 = std::make_shared<AddConstraint>(
+      "i2", "it", "const_1");
+
+  // j2 = jt - 1
+  auto j2 = std::make_shared<AddConstraint>(
+      "j2", "jt", "minus_1");
+
+  Solver solver(state);
+
+  solver.addConstraint(minus_1);
+  solver.addConstraint(const_1);
+  solver.addConstraint(i0);
+  solver.addConstraint(j0);
+  solver.addConstraint(i1);
+  solver.addConstraint(j1);
+  solver.addConstraint(it);
+  solver.addConstraint(jt);
+  solver.addConstraint(i2);
+  solver.addConstraint(j2);
+
+  solver.solve();
+
+  // Initial values remain unchanged.
+  REQUIRE(state["i0"].getLower().value == 0);
+  REQUIRE(state["i0"].getUpper().value == 0);
+
+  REQUIRE(state["j0"].getLower().value == 99);
+  REQUIRE(state["j0"].getUpper().value == 99);
+
+  // The two induction variables should remain finite after narrowing.
+  REQUIRE(state["i1"].getLower().type == Type::Constant);
+  REQUIRE(state["i1"].getUpper().type == Type::Constant);
+
+  REQUIRE(state["j1"].getLower().type == Type::Constant);
+  REQUIRE(state["j1"].getUpper().type == Type::Constant);
+
+  // The intersections must also have finite bounds.
+  REQUIRE(state["it"].getLower().type == Type::Constant);
+  REQUIRE(state["it"].getUpper().type == Type::Constant);
+
+  REQUIRE(state["jt"].getLower().type == Type::Constant);
+  REQUIRE(state["jt"].getUpper().type == Type::Constant);
+
+  // Verify that the relational invariants induced by the futures hold.
+  REQUIRE(state["it"].getUpper().value <= state["j1"].getUpper().value - 1);
+  REQUIRE(state["jt"].getLower().value >= state["i1"].getLower().value + 1);
+
+  // The transfer functions must also hold.
+  REQUIRE(state["i2"].getLower().value ==
+          state["it"].getLower().value + 1);
+  REQUIRE(state["i2"].getUpper().value ==
+          state["it"].getUpper().value + 1);
+
+  REQUIRE(state["j2"].getLower().value ==
+          state["jt"].getLower().value - 1);
+  REQUIRE(state["j2"].getUpper().value ==
+          state["jt"].getUpper().value - 1);
+}
