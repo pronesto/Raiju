@@ -8,13 +8,13 @@
 #include <algorithm>
 #include "Constraint.h"
 
+// Usamos weak_ptr para arestas para evitar ciclos de posse e memory leaks
 struct VariableVertex {
     std::string name;
-    Constraint* defined_by = nullptr; 
-    
+    std::weak_ptr<Constraint> defined_by; 
 
     struct OutEdge {
-        Constraint* target;
+        std::weak_ptr<Constraint> target; // Quem usa essa variável?
         EdgeType type;
     };
     std::vector<OutEdge> used_by; 
@@ -22,63 +22,61 @@ struct VariableVertex {
 
 class ConstraintGraph {
 private:
-
-    std::vector<std::unique_ptr<Constraint>> operation_vertices;
-    std::unordered_map<std::string, std::unique_ptr<VariableVertex>> data_vertices;
+    std::vector<std::shared_ptr<Constraint>> operation_vertices;
+    std::unordered_map<std::string, std::shared_ptr<VariableVertex>> data_vertices;
 
     VariableVertex* getOrCreateVar(const std::string& name) {
-        if (data_vertices.find(name) == data_vertices.end()) {
-            auto v = std::make_unique<VariableVertex>();
+        auto it = data_vertices.find(name);
+        if (it == data_vertices.end()) {
+            auto v = std::make_shared<VariableVertex>();
             v->name = name;
-            data_vertices[name] = std::move(v);
+            data_vertices[name] = v;
+            return v.get();
         }
-        return data_vertices[name].get();
+        return it->second.get();
     }
 
 public:
-    /**
-     * @brief Adiciona uma restrição e constrói as arestas do Grafo.
-     */
-    void addConstraint(std::unique_ptr<Constraint> c) {
-        Constraint* C = c.get();
-        
-        VariableVertex* def_var = getOrCreateVar(C->def);
-        def_var->defined_by = C;
+    void addConstraint(std::shared_ptr<Constraint> c) {
+        // 1. Registra a definição da variável
+        VariableVertex* def_var = getOrCreateVar(c->def);
+        def_var->defined_by = c;
 
-        for (const UseEdge& edge : C->get_uses()) {
+        // 2. Registra o uso da variável
+        for (const UseEdge& edge : c->get_uses()) {
             VariableVertex* use_var = getOrCreateVar(edge.target_variable);
-            use_var->used_by.push_back({C, edge.type});
+            
+            // "c" é um shared_ptr, podemos passá-lo diretamente para o construtor da OutEdge
+            // que converte implicitamente para weak_ptr
+            use_var->used_by.push_back({c, edge.type});
         }
 
         operation_vertices.push_back(std::move(c));
     }
 
-    /**
-     * @brief Calcula os SCCs e retorna em Ordem Topológica.
-     * Usando o Algoritmo de Tarjan adaptado para projetar o grafo C -> v -> C.
-     */
-    std::vector<std::vector<Constraint*>> getTopologicalSCCs() const {
-
+    std::vector<std::vector<std::shared_ptr<Constraint>>> getTopologicalSCCs() const {
         int timer = 0;
-        std::unordered_map<Constraint*, int> index;
-        std::unordered_map<Constraint*, int> lowlink;
-        std::unordered_map<Constraint*, bool> on_stack;
-        std::stack<Constraint*> st;
+        std::unordered_map<std::shared_ptr<Constraint>, int> index;
+        std::unordered_map<std::shared_ptr<Constraint>, int> lowlink;
+        std::unordered_map<std::shared_ptr<Constraint>, bool> on_stack;
+        std::stack<std::shared_ptr<Constraint>> st;
         
-        std::vector<std::vector<Constraint*>> sccs;
+        std::vector<std::vector<std::shared_ptr<Constraint>>> sccs;
 
-        auto tarjan = [&](auto& self, Constraint* u) -> void {
+        auto tarjan = [&](auto& self, std::shared_ptr<Constraint> u) -> void {
             index[u] = lowlink[u] = timer++;
             st.push(u);
             on_stack[u] = true;
 
-            const std::string& def_var_name = u->def;
-            auto it = data_vertices.find(def_var_name);
-            
+            // Busca as restrições que usam a variável definida por 'u'
+            auto it = data_vertices.find(u->def);
             if (it != data_vertices.end()) {
                 for (const auto& edge : it->second->used_by) {
-                    Constraint* v = edge.target;
+                    // Recupera o shared_ptr do weak_ptr
+                    std::shared_ptr<Constraint> v = edge.target.lock();
                     
+                    if (!v) continue; // Constraint inválida ou destruída
+
                     if (index.find(v) == index.end()) { 
                         self(self, v);
                         lowlink[u] = std::min(lowlink[u], lowlink[v]);
@@ -89,8 +87,8 @@ public:
             }
 
             if (lowlink[u] == index[u]) {
-                std::vector<Constraint*> current_scc;
-                Constraint* w;
+                std::vector<std::shared_ptr<Constraint>> current_scc;
+                std::shared_ptr<Constraint> w;
                 do {
                     w = st.top();
                     st.pop();
@@ -103,14 +101,12 @@ public:
         };
 
         for (const auto& c_ptr : operation_vertices) {
-            Constraint* C = c_ptr.get();
-            if (index.find(C) == index.end()) {
-                tarjan(tarjan, C);
+            if (index.find(c_ptr) == index.end()) {
+                tarjan(tarjan, c_ptr);
             }
         }
 
         std::reverse(sccs.begin(), sccs.end());
-
         return sccs;
     }
 };
