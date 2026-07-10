@@ -27,8 +27,8 @@ void Solver::growthAnalysis() {
 
     for (auto &constraint : constraints) {
       if (constraint->eval(this->state)) {
-        std::cout << "Growth changed: " << constraint->variable_name << ":"
-          << state[constraint->variable_name] << "\n";
+        std::cout << "Growth changed: " << constraint->def << ":"
+          << state[constraint->def] << "\n";
         changed_evaluating = true;
       }
     }
@@ -49,8 +49,8 @@ void Solver::narrowingAnalysis() {
 
     for (auto &constraint : constraints) {
       if (constraint->narrow(this->state)) {
-        std::cout << "Narrowing changed: " << constraint->variable_name << ":"
-          << state[constraint->variable_name] << "\n";
+        std::cout << "Narrowing changed: " << constraint->def << ":"
+          << state[constraint->def] << "\n";
         changed_narrowing = true;
       }
     }
