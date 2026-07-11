@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <memory>
 #include <variant>
 #include "AbstractValue.h"
 
@@ -61,6 +62,15 @@ public:
       eval(A);                                 // e(Y)
       AnalyzedValue eY = A[def];
 
+      if (oldY.getKind() == AnalyzedValue::Kind::Set && eY.getKind() == AnalyzedValue::Kind::Set) {
+        AnalyzedValue result = oldY;
+        for (auto val : eY.getValues()) {
+          result.addConstant(val);
+        }
+        A[def] = result;
+        return result != oldY;
+      }
+
       Bound lo = oldY.getLower();
       Bound hi = oldY.getUpper();
 
@@ -99,7 +109,12 @@ public:
     virtual std::vector<UseEdge> get_uses() const = 0; 
     std::string get_def(){
       return def;
-   }
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Constraint& c) {
+        os << c.def;
+        return os;
+    }
 };
 
 /**
@@ -116,6 +131,11 @@ public:
     std::vector<UseEdge> get_uses() const override {
         std::vector<UseEdge> ret = {};
         return ret;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const InitializationConstraint& c) {
+        os << c.def << ": " << c.constant;
+        return os;
     }
 };
 
@@ -139,7 +159,17 @@ public:
       }
       
       return edges;
-   }
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const PhiConstraint c) {
+        os << c.def << ": φ(";
+        for (int i = 0; i < c.operands.size(); i++) {
+            if (i > 0) os << ", ";
+            os << c.operands[i];
+        }
+        os << ")";
+        return os;
+    }
 };
 
 /**
@@ -166,6 +196,11 @@ class AddConstraint : public ArithmeticConstraint {
 public:
     using ArithmeticConstraint::ArithmeticConstraint;
     bool eval(AbstractState& A) override;
+
+    friend std::ostream& operator<<(std::ostream& os, const AddConstraint c) {
+        os << c.def << ": " << c.op1 << " + " << c.op2;
+        return os;
+    }
 };
 
 
@@ -186,6 +221,18 @@ public:
     // An intersection boundary can be a literal Constant, an Infinity, or a
     // Future
     using IntersectionBound = std::variant<AnalyzedValue::Bound, Future>;
+
+    friend std::ostream& operator<<(std::ostream& os, const IntersectionBound b) {
+        if (std::holds_alternative<AnalyzedValue::Bound>(b)) {
+            os << std::get<AnalyzedValue::Bound>(b);
+        } else {
+            const Future &f = std::get<Future>(b);
+            os << "f(" << f.target_variable << ")";
+            if (f.offset > 0) os << " + " << f.offset;
+            else if (f.offset < 0) os << " - " << -f.offset;
+        }
+        return os;
+    }
 
     // @brief Replace symbolic bounds with concrete bounds.
     // @param state The table with abstract states that we will inspect to
@@ -227,6 +274,25 @@ public:
 
       return uses;
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const IntersectionConstraint c) {
+        os << c.def << ": " << c.operand << " ∩ "
+            << "[" << c.lower_bound << "," << c.upper_bound <<  "]";
+        return os;
+    }
 };
 
-
+inline std::ostream& operator<<(std::ostream& os, const std::shared_ptr<Constraint>& c) {
+    if (auto ic = std::dynamic_pointer_cast<InitializationConstraint>(c)) {
+        os << *ic;
+    } else if (auto pc = std::dynamic_pointer_cast<PhiConstraint>(c)) {
+        os << *pc;
+    } else if (auto ac = std::dynamic_pointer_cast<AddConstraint>(c)) {
+        os << *ac;
+    } else if (auto ic = std::dynamic_pointer_cast<IntersectionConstraint>(c)) {
+        os << *ic;
+    } else {
+        os << *c.get();
+    }
+    return os;
+}

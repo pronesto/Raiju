@@ -16,6 +16,17 @@ void Solver::clear(){
 }
 
 void Solver::resolveSCC() {
+  std::cout << "\nSolver called for the following constraints:\n";
+  for (auto &constraint : this->constraints) {
+      std::cout << "\t" << constraint << "\n";
+  }
+
+  std::cout << "Solver state:\n";
+  for (auto [var, val] : state) {
+    std::cout << "\t" << var << " = " << val << "\n"; 
+  }
+  std::cout << "\n";
+
   growthAnalysis();
   futureResolution();
   narrowingAnalysis();
