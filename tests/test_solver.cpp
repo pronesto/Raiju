@@ -378,7 +378,7 @@ TEST_CASE("Solver handles complete running example",
   auto jt = std::make_shared<IntersectionConstraint>(
       "jt",
       "j1",
-      IntersectionConstraint::Future{"i1", 1},
+      IntersectionConstraint::Future{"i1", 0},
       plusInf);
   
   auto i2 = std::make_shared<AddConstraint>("i2", "it", "const_1");
@@ -456,38 +456,68 @@ TEST_CASE("Solver and ConstraintGraph Integration: Complete Running Example",
   using Bound = AnalyzedValue::Bound;
   using Type = Bound::Type;
 
-  Bound minusInf; minusInf.type = Type::MinusInfinity;
-  Bound plusInf; plusInf.type = Type::PlusInfinity;
-  Bound b_99; b_99.type = Type::Constant; b_99.value = 99;
-  Bound b_100; b_100.type = Type::Constant; b_100.value = 100;
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto minus_1 = std::make_shared<InitializationConstraint>("minus_1", -1);
 
-  // Utilitários 
-  graph.addConstraint(std::make_shared<InitializationConstraint>("c_1", 1));
-  graph.addConstraint(std::make_shared<InitializationConstraint>("c_minus_1", -1));
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
 
-  // Loop de K
-  graph.addConstraint(std::make_shared<InitializationConstraint>("k0", 0));
-  graph.addConstraint(std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, b_99));
-  graph.addConstraint(std::make_shared<IntersectionConstraint>("kf", "k1", b_100, plusInf));
-  graph.addConstraint(std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"}));
-  graph.addConstraint(std::make_shared<AddConstraint>("k2", "kt", "c_1"));
+  Bound plusInf;
+  plusInf.type = Type::PlusInfinity;
 
-  // Inicialização de I e J
-  graph.addConstraint(std::make_shared<InitializationConstraint>("i0", 0));
-  graph.addConstraint(std::make_shared<PhiConstraint>("j0", std::vector<std::string>{"kt"}));
+  Bound ninetyNine;
+  ninetyNine.type = Type::Constant;
+  ninetyNine.value = 99;
 
-  // Loops mutuamente recursivos de I e J
-  graph.addConstraint(std::make_shared<PhiConstraint>("i1", std::vector<std::string>{"i0", "i2"}));
-  graph.addConstraint(std::make_shared<PhiConstraint>("j1", std::vector<std::string>{"j0", "j2"}));
+  Bound hundred;
+  hundred.type = Type::Constant;
+  hundred.value = 100;
 
-  graph.addConstraint(std::make_shared<IntersectionConstraint>(
-      "it", "i1", minusInf, IntersectionConstraint::Future{"j1", -1}));
-      
-  graph.addConstraint(std::make_shared<IntersectionConstraint>(
-      "jt", "j1", IntersectionConstraint::Future{"i1", 0}, plusInf));
 
-  graph.addConstraint(std::make_shared<AddConstraint>("i2", "it", "c_1"));
-  graph.addConstraint(std::make_shared<AddConstraint>("j2", "jt", "c_minus_1"));
+  auto k0 = std::make_shared<InitializationConstraint>("k0", 0);
+  auto kt = std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, ninetyNine);
+  auto kf = std::make_shared<IntersectionConstraint>("kf", "k1", hundred, plusInf);
+  auto k1 = std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"});
+
+  auto i0 = std::make_shared<InitializationConstraint>("i0", 0);
+  auto j0 = std::make_shared<IntersectionConstraint>("j0", "kt", minusInf, plusInf);
+
+  auto i1 = std::make_shared<PhiConstraint>("i1", std::vector<std::string>{"i0", "i2"});
+  auto j1 = std::make_shared<PhiConstraint>("j1", std::vector<std::string>{"j0", "j2"});
+
+  // it = i1 ∩ [-inf, ft(j1)-1]
+  auto it = std::make_shared<IntersectionConstraint>(
+      "it",
+      "i1",
+      minusInf,
+      IntersectionConstraint::Future{"j1", -1});
+
+  // jt = j1 ∩ [ft(i1)+1, +inf]
+  auto jt = std::make_shared<IntersectionConstraint>(
+      "jt",
+      "j1",
+      IntersectionConstraint::Future{"i1", 0},
+      plusInf);
+  
+  auto i2 = std::make_shared<AddConstraint>("i2", "it", "const_1");
+  auto j2 = std::make_shared<AddConstraint>("j2", "jt", "minus_1");
+  auto k2 = std::make_shared<AddConstraint>("k2", "kt", "const_1");
+
+  graph.addConstraint(minus_1);
+  graph.addConstraint(const_1);
+  graph.addConstraint(k0);
+  graph.addConstraint(kt);
+  graph.addConstraint(kf);
+  graph.addConstraint(k1);
+  graph.addConstraint(i0);
+  graph.addConstraint(j0);
+  graph.addConstraint(i1);
+  graph.addConstraint(j1);
+  graph.addConstraint(it);
+  graph.addConstraint(jt);
+  graph.addConstraint(i2);
+  graph.addConstraint(j2);
+  graph.addConstraint(k2);
 
   // ==========================================
   // O teste real da sua arquitetura:
