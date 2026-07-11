@@ -299,9 +299,37 @@ bool MultiplyConstraint::eval(AbstractState &A)
     int max = std::max({p1, p2, p3, p4});
 
     result.setAsInterval({AnalyzedValue::Bound::Type::Constant, min},
-                         {AnalyzedValue::Bound::Type::Constant, max}, 1);
+                         {AnalyzedValue::Bound::Type::Constant, max}, 1); // FIXME: Interval stride
   
-    A[variable_name] = result;
+    A[this->variable_name] = result;
     return old != result;
   }
+}
+
+bool LinearConstraint::eval(AbstractState &A)
+{
+  AnalyzedValue old = A[this->variable_name];
+  AnalyzedValue src = A[this->operand];
+
+  AnalyzedValue result;
+
+  if(src.getKind() == AnalyzedValue::Kind::Set)
+  {
+    std::vector<int> consts;
+    for (int v : src.getValues()) {
+      consts.emplace_back((a * v) + b);
+    }
+    result.addConstants(consts);
+  }else{
+    int k1 = (this->a*src.getLower().value + this->b);
+    int ku = (this->a*src.getUpper().value + this->b);
+
+    int min = std::min(k1,ku);
+    int max = std::max(k1,ku);
+
+    result.setAsInterval({AnalyzedValue::Bound::Type::Constant,min}, {AnalyzedValue::Bound::Type::Constant,max}, src.getStride());
+  }
+
+  A[this->variable_name] = result;
+  return old != result;
 }

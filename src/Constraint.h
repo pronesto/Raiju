@@ -186,3 +186,14 @@ public:
     using ArithmeticConstraint::ArithmeticConstraint;
     bool eval(AbstractState& A) override;
 };
+
+class LinearConstraint : public Constraint{
+    std::string operand;
+    int a, b;
+
+    public:
+        LinearConstraint(std::string dest, std::string src, int multiplier, int offset)
+        : Constraint(std::move(dest)), operand(std::move(src)), a(multiplier), b(offset) {}
+
+        bool eval(AbstractState& A) override;
+};
