@@ -295,7 +295,7 @@ bool MultiplyConstraint::eval(AbstractState &A)
     int p3 = u1.value * l2.value;
     int p4 = u1.value * u2.value;
 
-    int min = std::max({p1, p2, p3, p4});
+    int min = std::min({p1, p2, p3, p4});
     int max = std::max({p1, p2, p3, p4});
 
     result.setAsInterval({AnalyzedValue::Bound::Type::Constant, min},
