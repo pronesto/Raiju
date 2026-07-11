@@ -90,6 +90,10 @@ bool AddConstraint::eval(AbstractState& A) {
 
   auto getUpper = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
+      if (v.getValues().empty())
+        return {AnalyzedValue::Bound::Type::Constant,
+              *v.getValues().begin()};
+              
       return {AnalyzedValue::Bound::Type::Constant,
               *v.getValues().rbegin()};
     }
