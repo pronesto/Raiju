@@ -176,3 +176,13 @@ public:
                            IntersectionBound low, IntersectionBound up);
     bool eval(AbstractState& A) override;
 };
+
+/**
+ * @class MultiplyConstraint
+ * @brief Models abstract addition: v0 = v1 * v2
+ */
+class MultiplyConstraint : public ArithmeticConstraint {
+public:
+    using ArithmeticConstraint::ArithmeticConstraint;
+    bool eval(AbstractState& A) override;
+};

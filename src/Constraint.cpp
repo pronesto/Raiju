@@ -260,3 +260,48 @@ bool IntersectionConstraint::eval(AbstractState &A) {
   A[variable_name] = result;
   return oldValue != result;
 }
+
+bool MultiplyConstraint::eval(AbstractState &A)
+{
+  AnalyzedValue old = A[this->variable_name];
+
+  AnalyzedValue lhs = A[this->op1];
+  AnalyzedValue rhs = A[this->op2];
+
+  AnalyzedValue result;
+
+  if(lhs.getKind() == AnalyzedValue::Kind::Set && rhs.getKind() == AnalyzedValue::Kind::Set)
+  {
+    if (lhs.getValues().empty() || rhs.getValues().empty()) {
+      A[variable_name] = result;
+      return old != result;
+    }
+
+    std::vector<int> consts;
+    for (int l : lhs.getValues()) {
+        for (int r : rhs.getValues()) {
+            consts.emplace_back(l * r);
+        }
+    }
+    result.addConstants(consts);
+  }else{
+    AnalyzedValue::Bound l1 = lhs.getLower();
+    AnalyzedValue::Bound l2 = rhs.getLower();
+    AnalyzedValue::Bound u1 = lhs.getUpper();
+    AnalyzedValue::Bound u2 = rhs.getUpper();
+
+    int p1 = l1.value * l2.value;
+    int p2 = l1.value * u2.value;
+    int p3 = u1.value * l2.value;
+    int p4 = u1.value * u2.value;
+
+    int min = std::max({p1, p2, p3, p4});
+    int max = std::max({p1, p2, p3, p4});
+
+    result.setAsInterval({AnalyzedValue::Bound::Type::Constant, min},
+                         {AnalyzedValue::Bound::Type::Constant, max}, 1);
+  
+    A[variable_name] = result;
+    return old != result;
+  }
+}
