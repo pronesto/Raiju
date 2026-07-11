@@ -402,6 +402,13 @@ void AbstractValue<N>::addConstants(std::vector<int> &vals) {
             values.emplace(val);
         }
 
+        // Assign bounds based on the captured set bounds
+        lower.type = Bound::Type::Constant;
+        lower.value = *values.begin();
+
+        upper.type = Bound::Type::Constant;
+        upper.value = *values.rbegin();
+
         // Check if we have exceeded the exact tracking capacity N
         if (values.size() > N) {
             // Collapse the representation into a Strided Interval
@@ -415,13 +422,6 @@ void AbstractValue<N>::addConstants(std::vector<int> &vals) {
                 }
                 current_gcd = std::gcd(current_gcd, v - base);
             }
-
-            // Assign bounds based on the captured set bounds
-            lower.type = Bound::Type::Constant;
-            lower.value = *values.begin();
-
-            upper.type = Bound::Type::Constant;
-            upper.value = *values.rbegin();
 
             stride = (current_gcd == 0) ? 1 : static_cast<unsigned>(current_gcd);
 
