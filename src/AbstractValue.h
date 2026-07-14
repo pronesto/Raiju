@@ -14,7 +14,7 @@
 #include <numeric>
 #include <vector>
 
-#define MAX_COUNTER 20
+#define MAX_COUNTER 7
 
 /**
  * @class AbstractValue
@@ -205,8 +205,32 @@ public:
   void setAsInterval(const Bound &lowerBound, const Bound &upperBound,
                      unsigned intervalStride = 1) {
     kind = Kind::StridedInterval;
+
+    const Bound oldLower = lower;
+    const Bound oldUpper = upper;
+
     lower = lowerBound;
     upper = upperBound;
+
+    // std::cout << "Counter: " << counter << "\n\n";
+    
+    bool incrementCounter = false;
+
+    if (lowerBound < oldLower) {
+      if (counter < MAX_COUNTER) incrementCounter = true;
+      else lower.type = Bound::Type::MinusInfinity;
+    } else if (oldLower.type == Bound::Type::MinusInfinity) {
+      lower.type = Bound::Type::MinusInfinity;
+    }
+
+    if (upperBound > oldUpper) {
+      if (counter < MAX_COUNTER) incrementCounter = true;
+      else upper.type = Bound::Type::PlusInfinity;
+    } else if (oldUpper.type == Bound::Type::PlusInfinity) {
+      upper.type = Bound::Type::PlusInfinity;
+    }
+    if (incrementCounter) ++counter;
+
     stride = std::max(1u, intervalStride);
     values.clear();
   }

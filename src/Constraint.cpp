@@ -53,7 +53,7 @@ bool AddConstraint::eval(AbstractState& A) {
     const AnalyzedValue &lhs = A[op1];
     const AnalyzedValue &rhs = A[op2];
     
-    AnalyzedValue result; // Starts at bottom (empty set)
+    // AnalyzedValue result; // Starts at bottom (empty set)
 
     // Exact evaluation: finite set × finite set
     if (lhs.getKind() == AnalyzedValue::Kind::Set &&
@@ -61,8 +61,8 @@ bool AddConstraint::eval(AbstractState& A) {
 
         // Bottom propagates.
         if (lhs.getValues().empty() || rhs.getValues().empty()) {
-            A[def] = result;
-            return old_val != result;
+            A[def].setAsBottom();
+            return old_val != A[def];
         }
 
         std::vector<int> consts;
@@ -73,10 +73,10 @@ bool AddConstraint::eval(AbstractState& A) {
             }
         }
 
-        result.addConstants(consts);
+        A[def].addConstants(consts);
 
-    A[def] = result;
-    return old_val != result;
+    if (old_val != A[def]) A[def].incrementCounter();
+    return old_val != A[def];
   }
 
   // Otherwise treat every operand as a strided interval.
@@ -137,10 +137,14 @@ bool AddConstraint::eval(AbstractState& A) {
           ? rhs.getStride()
           : 1;
 
-  result.setAsInterval(lower, upper, std::gcd(s1, s2));
+  if (def == "j0" || def == "j1" || def == "jt" || def == "j2") {
+    std::cout << "Setting interval for variable " << def << "\n";
+    std::cout << "Original bounds: [" << A[def].getLower() << "," << A[def].getUpper() << "]\n";
+    std::cout << "Bounds: [" << lower << ", " << upper << "]\n";
+  }
+  A[def].setAsInterval(lower, upper, std::gcd(s1, s2));
 
-  A[def] = result;
-  return old_val != result;
+  return old_val != A[def];
 }
 
 // --- IntersectionConstraint (v0 = v1 intersection [low, up]) ---
@@ -214,7 +218,7 @@ bool IntersectionConstraint::eval(AbstractState &A) {
   auto low = resolveBound(lower_bound, true, A);
   auto up = resolveBound(upper_bound, false, A);
 
-  AnalyzedValue result;
+  // AnalyzedValue result;
 
   // Source is a finite set.
   if (src.getKind() == AnalyzedValue::Kind::Set) {
@@ -226,7 +230,7 @@ bool IntersectionConstraint::eval(AbstractState &A) {
       if (up.type == AnalyzedValue::Bound::Type::Constant)
         keep &= (v <= up.value);
       if (keep)
-        result.addConstant(v);
+        A[def].addConstant(v);
     }
   }
 
@@ -257,10 +261,14 @@ bool IntersectionConstraint::eval(AbstractState &A) {
         lower.value > upper.value) {
       // Leave result as bottom.
     } else {
-      result.setAsInterval(lower, upper, src.getStride());
+      if (def == "j0" || def == "j1" || def == "jt" || def == "j2") {
+        std::cout << "Setting interval for variable " << def << "\n";
+        std::cout << "Original bounds: [" << A[def].getLower() << "," << A[def].getUpper() << "]\n";
+        std::cout << "Bounds: [" << lower << ", " << upper << "]\n\n";
+      }
+      A[def].setAsInterval(lower, upper, src.getStride());
     }
   }
 
-    A[def] = result;
-    return oldValue != result;
+    return oldValue != A[def];
 }
