@@ -448,3 +448,101 @@ TEST_CASE("Resolve future upper bound",
 
   REQUIRE(dummy["y"] == expected);
 }
+
+
+TEST_CASE("Constraints - MultiplyConstraint Overflow",
+          "[constraints][mul]") {
+    AbstractState state;
+
+    AnalyzedValue a;
+    a.addConstant(1);
+    a.addConstant(2);
+    a.addConstant(3);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.addConstant(10);
+    b.addConstant(20);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+
+    SECTION("Multiplication widens after the finite-set capacity is exceeded") {
+
+        REQUIRE(multiply.eval(state));
+
+        const auto &result = state["c"];
+
+        REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
+
+        REQUIRE(result.getLower().value == 10);
+        REQUIRE(result.getUpper().value == 60);
+        
+        REQUIRE(result.getStride() == 1);
+    }
+}
+
+TEST_CASE("Constraints - MultiplyConstraint Fixed Point",
+          "[constraints][mul]") {
+  AbstractState state;
+
+  AnalyzedValue a;
+  a.addConstant(6);
+  state["a"] = a;
+
+  AnalyzedValue b;
+  b.addConstant(7);
+  state["b"] = b;
+
+  MultiplyConstraint multiply("c", "a", "b");
+
+  REQUIRE(multiply.eval(state));
+
+  SECTION("Second evaluation returns false") {
+    REQUIRE_FALSE(multiply.eval(state));
+  }
+}
+
+TEST_CASE("Constraints - MultiplyConstraint With Zero",
+          "[constraints][mul]") {
+  AbstractState state;
+
+  AnalyzedValue a;
+  a.addConstant(0);
+  state["a"] = a;
+
+  AnalyzedValue b;
+  b.addConstant(5);
+  state["b"] = b;
+
+  MultiplyConstraint multiply("c", "a", "b");
+
+  REQUIRE(multiply.eval(state));
+
+  AnalyzedValue expected;
+  expected.addConstant(0);
+
+  REQUIRE(state["c"] == expected);
+}
+
+TEST_CASE("Constraints - MultiplyConstraint Negative Values",
+          "[constraints][mul]") {
+  AbstractState state;
+
+  AnalyzedValue a;
+  a.addConstant(-2);
+  state["a"] = a;
+
+  AnalyzedValue b;
+  b.addConstant(4);
+  state["b"] = b;
+
+  MultiplyConstraint multiply("c", "a", "b");
+
+  REQUIRE(multiply.eval(state));
+
+  AnalyzedValue expected;
+  expected.addConstant(-8);
+
+  REQUIRE(state["c"] == expected);
+}
