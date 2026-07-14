@@ -300,10 +300,10 @@ bool MultiplyConstraint::eval(AbstractState &A)
 
     result.setAsInterval({AnalyzedValue::Bound::Type::Constant, min},
                          {AnalyzedValue::Bound::Type::Constant, max}, 1); // FIXME: Interval stride
-  
-    A[this->variable_name] = result;
-    return old != result;
   }
+
+  A[this->variable_name] = result;
+  return old != result;
 }
 
 bool LinearConstraint::eval(AbstractState &A)
