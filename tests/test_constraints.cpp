@@ -546,3 +546,102 @@ TEST_CASE("Constraints - MultiplyConstraint Negative Values",
 
   REQUIRE(state["c"] == expected);
 }
+
+TEST_CASE("Constraints - LinearConstraint Set Behavior", "[constraints][linear]") {
+  AbstractState state;
+
+  // v1 = {1, 2, 3}
+  AnalyzedValue v1;
+  v1.addConstant(1);
+  v1.addConstant(2);
+  v1.addConstant(3);
+  state["v1"] = v1;
+
+  // v0 = 2 * v1 + 5
+  // Results (2*1)+5=7, (2*2)+5=9, (2*3)+5=11
+  LinearConstraint lin_v0("v0", "v1", 2, 5);
+
+  SECTION("Correctly computes linear transformation on sets") {
+    bool changed = lin_v0.eval(state);
+
+    REQUIRE(changed == true);
+    REQUIRE(state["v0"].getKind() == AnalyzedValue::Kind::Set);
+
+    AnalyzedValue expected;
+    expected.addConstant(7);
+    expected.addConstant(9);
+    expected.addConstant(11);
+
+    REQUIRE(state["v0"] == expected);
+  }
+
+  SECTION("Second evaluation returns false (Fixed Point)") {
+    lin_v0.eval(state);
+    REQUIRE_FALSE(lin_v0.eval(state));
+  }
+}
+
+TEST_CASE("Constraints - LinearConstraint Interval Behavior", "[constraints][linear]") {
+  AbstractState state;
+
+  // v1 = [10, 20]
+  AnalyzedValue v1;
+  AnalyzedValue::Bound low = {AnalyzedValue::Bound::Type::Constant, 10};
+  AnalyzedValue::Bound up = {AnalyzedValue::Bound::Type::Constant, 20};
+  v1.setAsInterval(low, up, 1);
+  state["v1"] = v1;
+
+  // v0 = 3 * v1 - 2
+  // New min: 3*10 - 2 = 28
+  // New max: 3*20 - 2 = 58
+  LinearConstraint lin_v0("v0", "v1", 3, -2);
+
+  SECTION("Correctly computes linear transformation on intervals") {
+    REQUIRE(lin_v0.eval(state));
+
+    const auto& res = state["v0"];
+    REQUIRE(res.getKind() == AnalyzedValue::Kind::StridedInterval);
+    REQUIRE(res.getLower().value == 28);
+    REQUIRE(res.getUpper().value == 58);
+  }
+}
+
+TEST_CASE("Constraints - LinearConstraint Negative Multiplier", "[constraints][linear]") {
+  AbstractState state;
+
+  // v1 = [0, 10]
+  AnalyzedValue v1;
+  v1.setAsInterval({AnalyzedValue::Bound::Type::Constant, 0}, 
+                   {AnalyzedValue::Bound::Type::Constant, 10}, 1);
+  state["v1"] = v1;
+
+  // v0 = -1 * v1 + 5
+  // k1 = -1*0 + 5 = 5
+  // ku = -1*10 + 5 = -5
+  // min = -5, max = 5
+  LinearConstraint lin_v0("v0", "v1", -1, 5);
+
+  SECTION("Handles negative multiplier in intervals") {
+    REQUIRE(lin_v0.eval(state));
+
+    const auto& res = state["v0"];
+    
+    REQUIRE(res.getLower().value == -5);
+    REQUIRE(res.getUpper().value == 5);
+  }
+}
+
+TEST_CASE("Constraints - LinearConstraint Identity", "[constraints][linear]") {
+  AbstractState state;
+
+  AnalyzedValue v1;
+  v1.addConstant(42);
+  state["v1"] = v1;
+
+  LinearConstraint identity("v0", "v1", 1, 0);
+
+  SECTION("Preserves value under identity operation") {
+    identity.eval(state);
+    REQUIRE(state["v0"].getValues() == std::set<int>{42});
+  }
+}
