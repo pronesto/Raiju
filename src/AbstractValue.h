@@ -14,6 +14,8 @@
 #include <numeric>
 #include <vector>
 
+#define MAX_COUNTER 7
+
 /**
  * @class AbstractValue
  * @brief Represents an element in the Finite-Set / Strided-Interval abstract
@@ -67,17 +69,28 @@ public:
 
 private:
     Kind kind;                   /**< A Set or a StridedInterval. */
-    std::set<int> values;     /**< Constants when kind == Kind::Set. Unused otherwise. */
+    std::set<int> values;        /**< Constants when kind == Kind::Set. Unused otherwise. */
     Bound lower;                 /**< Lower bound used when kind == Kind::StridedInterval. */
     Bound upper;                 /**< Upper bound used when kind == Kind::StridedInterval. */
     unsigned stride;             /**< Stride value ($s \ge 1$) for strided intervals. */
+    unsigned counter;     /**< Stride value ($s \ge 1$) for strided intervals. */
 
 public:
   /**
    * @brief Default constructor initializing to an empty set (the bottom
    * element).
    */
-  AbstractValue() : kind(Kind::Set), stride(1) {
+  AbstractValue() : kind(Kind::Set), stride(1), counter(0) {
+    lower.type = Bound::Type::Constant;
+    lower.value = 0;
+    upper.type = Bound::Type::Constant;
+    upper.value = 0;
+  }
+
+  void setAsBottom() {
+    kind = Kind::Set;
+    stride = 1;
+    counter = 0;
     lower.type = Bound::Type::Constant;
     lower.value = 0;
     upper.type = Bound::Type::Constant;
@@ -99,7 +112,39 @@ public:
      */
     void addConstant(int val);
 
+    /**
+     * @brief Adds a batch of literal constant into the abstract value representation.
+     * * @param vals The integer constants to add.
+     */
     void addConstants(std::vector<int> &vals);
+
+    /**
+     * @brief Decrease the lower bound of the abstract value representation
+     * * @param val The integer value of the new lower bound.
+     */
+    void decreaseLower(Bound _lower);
+
+    /**
+     * @brief Increase the upper bound of the abstract value representation
+     * * @param val The integer value of the new upper bound.
+     */
+    void increaseUpper(Bound _upper);
+
+    /**
+     * @brief Increment the value of the counter by 1
+     */
+    void incrementCounter() { ++counter; }
+
+    /**
+     * @brief Change Kind from Set to StridedInterval
+     */
+    void changeKind() { kind = Kind::StridedInterval; }
+
+    /**
+     * @brief Set a new stride of a StridedInterval
+     * * @param val The integer value of the new stride.
+     */
+    void setStride(unsigned _stride) { stride = _stride; }
     
     /**
      * @brief Get the current structural representation kind.
@@ -160,8 +205,32 @@ public:
   void setAsInterval(const Bound &lowerBound, const Bound &upperBound,
                      unsigned intervalStride = 1) {
     kind = Kind::StridedInterval;
+
+    const Bound oldLower = lower;
+    const Bound oldUpper = upper;
+
     lower = lowerBound;
     upper = upperBound;
+
+    // std::cout << "Counter: " << counter << "\n\n";
+    
+    bool incrementCounter = false;
+
+    if (lowerBound < oldLower) {
+      if (counter < MAX_COUNTER) incrementCounter = true;
+      else lower.type = Bound::Type::MinusInfinity;
+    } else if (oldLower.type == Bound::Type::MinusInfinity) {
+      lower.type = Bound::Type::MinusInfinity;
+    }
+
+    if (upperBound > oldUpper) {
+      if (counter < MAX_COUNTER) incrementCounter = true;
+      else upper.type = Bound::Type::PlusInfinity;
+    } else if (oldUpper.type == Bound::Type::PlusInfinity) {
+      upper.type = Bound::Type::PlusInfinity;
+    }
+    if (incrementCounter) ++counter;
+
     stride = std::max(1u, intervalStride);
     values.clear();
   }
@@ -446,6 +515,62 @@ void AbstractValue<N>::addConstants(std::vector<int> &vals) {
             }
         }
     }
+}
+
+template <unsigned N> void AbstractValue<N>::decreaseLower(Bound _lower) {
+  // Current lower bound is already -inf
+  if (lower.type == Bound::Type::MinusInfinity) {
+    return;
+  }
+
+  // Invalid lower bound +inf
+  if (_lower.type == Bound::Type::PlusInfinity) {
+    return;
+  }
+  
+  // New lower bound is -inf
+  if (_lower.type == Bound::Type::MinusInfinity) {
+    lower.type = Bound::Type::MinusInfinity;
+    return;
+  }
+
+  // Both lower bounds are constants
+  if (_lower.value < lower.value) {
+    if (counter < MAX_COUNTER) {
+      lower.value = _lower.value;
+      ++counter;
+    } else {
+      lower.type = Bound::Type::MinusInfinity;
+    }
+  }
+}
+
+template <unsigned N> void AbstractValue<N>::increaseUpper(Bound _upper) {
+  // Current lower bound is already +inf
+  if (upper.type == Bound::Type::PlusInfinity) {
+    return;
+  }
+
+  // Invalid upper bound -inf
+  if (_upper.type == Bound::Type::MinusInfinity) {
+    return;
+  }
+  
+  // New upper bound is +inf
+  if (_upper.type == Bound::Type::PlusInfinity) {
+    upper.type = Bound::Type::PlusInfinity;
+    return;
+  }
+
+  // Both upper bounds are constants
+  if (_upper.value > upper.value) {
+    if (counter < MAX_COUNTER) {
+      upper.value = _upper.value;
+      ++counter;
+    } else {
+      upper.type = Bound::Type::PlusInfinity;
+    }
+  }
 }
 
 template <unsigned N> void AbstractValue<N>::join(const AbstractValue &other) {
