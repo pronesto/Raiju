@@ -58,15 +58,17 @@ public:
       AnalyzedValue oldY = A[def];   // I[Y]
 
       // force eval()'s bottom-case branch
-      A[def] = AnalyzedValue();      
+      A[def].setAsBottom();     
       eval(A);                                 // e(Y)
       AnalyzedValue eY = A[def];
 
       if (oldY.getKind() == AnalyzedValue::Kind::Set && eY.getKind() == AnalyzedValue::Kind::Set) {
         AnalyzedValue result = oldY;
+        std::vector<int> vals;
         for (auto val : eY.getValues()) {
-          result.addConstant(val);
+          vals.emplace_back(val);
         }
+        result.addConstant(vals);
         A[def] = result;
         return result != oldY;
       }
@@ -96,13 +98,11 @@ public:
         hi = eY.getUpper();
       }
 
-      AnalyzedValue result;
-      result.setAsInterval(lo, hi, 1);
-      A[def] = result;
+      A[def].setAsInterval(lo, hi, 1);
 
       // Termination relies on this returning false when no further shrinking
       // occurs
-      return result != oldY;
+      return A[def] != oldY;
 
     }
     

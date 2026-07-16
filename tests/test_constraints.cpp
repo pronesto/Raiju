@@ -19,7 +19,8 @@ TEST_CASE("Constraints - InitializationConstraint Behavior", "[constraints]") {
 
     // Running a quick self-join test to prove 42 is tracked inside the set
     AnalyzedValue expected;
-    expected.addConstant(42);
+    std::vector<int> vals = {42};
+    expected.addConstant(vals);
     REQUIRE(state["x0"] == expected);
   }
 
@@ -52,8 +53,8 @@ TEST_CASE("Constraints - PhiConstraint Behavior", "[constraints]") {
 
     // Expect x0 to hold the union {3, 5}
     AnalyzedValue expected;
-    expected.addConstant(3);
-    expected.addConstant(5);
+    std::vector<int> vals = {3,5};
+    expected.addConstant(vals);
     REQUIRE(state["x0"] == expected);
   }
 
@@ -96,15 +97,16 @@ TEST_CASE("Constraints - AddConstraint Pairwise Sets", "[constraints][add]") {
   // tool. But since state is an unordered_map, we can populate it directly in
   // the test!
 
+  // v1 = {2,3}
   AnalyzedValue v1;
-  v1.addConstant(2);
-  v1.addConstant(3);
+  std::vector<int> vals = {2,3};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   // v2 = {10, 20}
+  vals = {10,20};
   AnalyzedValue v2;
-  v2.addConstant(10);
-  v2.addConstant(20);
+  v2.addConstant(vals);
   state["v2"] = v2;
 
   // v0 = v1 + v2
@@ -119,10 +121,8 @@ TEST_CASE("Constraints - AddConstraint Pairwise Sets", "[constraints][add]") {
     // Expected unique combinations: 2+10=12, 2+20=22, 3+10=13, 3+20=23
     // Sorted: {12, 13, 22, 23} (Total size 4, which is <= N=4)
     AnalyzedValue expected;
-    expected.addConstant(12);
-    expected.addConstant(13);
-    expected.addConstant(22);
-    expected.addConstant(23);
+    std::vector<int> vals = {12, 13, 22, 23};
+    expected.addConstant(vals);
 
     REQUIRE(state["v0"] == expected);
   }
@@ -133,14 +133,13 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
   AbstractState state;
 
   AnalyzedValue v1;
-  v1.addConstant(1);
-  v1.addConstant(2);
-  v1.addConstant(3);
+  std::vector<int> vals = {1,2,3};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   AnalyzedValue v2;
-  v2.addConstant(10);
-  v2.addConstant(20);
+  vals = {10,20};
+  v2.addConstant(vals);
   state["v2"] = v2;
 
   AddConstraint add_v0("v0", "v1", "v2");
@@ -168,9 +167,8 @@ TEST_CASE("Intersection with constant upper bound",
   AbstractState state;
 
   AnalyzedValue v;
-  v.addConstant(1);
-  v.addConstant(5);
-  v.addConstant(10);
+  std::vector<int> vals = {1,5,10};
+  v.addConstant(vals);
 
   state["x"] = v;
 
@@ -229,9 +227,8 @@ TEST_CASE("Growth phase ignores futures", "[constraints][intersect]") {
   AbstractState state;
 
   AnalyzedValue x;
-  x.addConstant(1);
-  x.addConstant(5);
-  x.addConstant(10);
+  std::vector<int> vals = {1,5,10};
+  x.addConstant(vals);
 
   state["x"] = x;
 

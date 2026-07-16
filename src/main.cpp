@@ -6,7 +6,8 @@ int main() {
     
     // Quick smoke test of your template domain
     AbstractValue<4> val;
-    val.addConstant(42);
+    std::vector<int> vals = {42};
+    val.addConstant(vals);
     
     std::cout << "Success! Lattice state kind: " 
               << (val.getKind() == AbstractValue<4>::Kind::Set ?

@@ -18,12 +18,9 @@ InitializationConstraint::InitializationConstraint(std::string var, int c)
 bool InitializationConstraint::eval(AbstractState& A) {
     AnalyzedValue old_val = A[def];
 
-  // Build the exact set representation {c}
-  AnalyzedValue new_val;
-  new_val.addConstant(constant);
-
-    A[def] = new_val;
-    return old_val != new_val; // Leverages your custom equality operator!
+    std::vector<int> vals = {constant};
+    A[def].addConstant(vals);
+    return old_val != A[def]; // Leverages your custom equality operator!
 }
 
 // --- PhiConstraint (v0 = phi(v1, v2, ...)) ---
@@ -73,9 +70,8 @@ bool AddConstraint::eval(AbstractState& A) {
             }
         }
 
-        A[def].addConstants(consts);
+        A[def].addConstant(consts);
 
-    if (old_val != A[def]) A[def].incrementCounter();
     return old_val != A[def];
   }
 
@@ -137,11 +133,6 @@ bool AddConstraint::eval(AbstractState& A) {
           ? rhs.getStride()
           : 1;
 
-  if (def == "j0" || def == "j1" || def == "jt" || def == "j2") {
-    std::cout << "Setting interval for variable " << def << "\n";
-    std::cout << "Original bounds: [" << A[def].getLower() << "," << A[def].getUpper() << "]\n";
-    std::cout << "Bounds: [" << lower << ", " << upper << "]\n";
-  }
   A[def].setAsInterval(lower, upper, std::gcd(s1, s2));
 
   return old_val != A[def];
@@ -223,6 +214,7 @@ bool IntersectionConstraint::eval(AbstractState &A) {
   // Source is a finite set.
   if (src.getKind() == AnalyzedValue::Kind::Set) {
 
+    std::vector<int> vals;
     for (int v : src.getValues()) {
       bool keep = true;
       if (low.type == AnalyzedValue::Bound::Type::Constant)
@@ -230,8 +222,11 @@ bool IntersectionConstraint::eval(AbstractState &A) {
       if (up.type == AnalyzedValue::Bound::Type::Constant)
         keep &= (v <= up.value);
       if (keep)
-        A[def].addConstant(v);
+        vals.emplace_back(v);
     }
+
+    if (!vals.empty())
+      A[def].addConstant(vals);
   }
 
   // Source is already an interval.
@@ -261,11 +256,6 @@ bool IntersectionConstraint::eval(AbstractState &A) {
         lower.value > upper.value) {
       // Leave result as bottom.
     } else {
-      if (def == "j0" || def == "j1" || def == "jt" || def == "j2") {
-        std::cout << "Setting interval for variable " << def << "\n";
-        std::cout << "Original bounds: [" << A[def].getLower() << "," << A[def].getUpper() << "]\n";
-        std::cout << "Bounds: [" << lower << ", " << upper << "]\n\n";
-      }
       A[def].setAsInterval(lower, upper, src.getStride());
     }
   }

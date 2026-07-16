@@ -59,16 +59,16 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   INFO("k1 Upper Bound Type: " << (int)state["k1"].getUpper().type);
   INFO("k1 Upper Bound Value: " << state["k1"].getUpper().value);
   REQUIRE(state["k1"].getLower().value == 0);
-  REQUIRE(state["k1"].getUpper().value == 100);
+  REQUIRE(state["k1"].getUpper().type == Bound::Type::PlusInfinity);
 
   // kt without narrowing should evaluate alongside its source 'k1' up to
   // PlusInfinity: [0, +inf]
   REQUIRE(state["kt"].getLower().value == 0);
-  REQUIRE(state["kt"].getUpper().value == 99);
+  REQUIRE(state["kt"].getUpper().type == Bound::Type::PlusInfinity);
 
   // k2 follows 'kt' + 1: [1, +inf]
   REQUIRE(state["k2"].getLower().value == 1);
-  REQUIRE(state["k2"].getUpper().value == 100);
+  REQUIRE(state["k2"].getUpper().type == Bound::Type::PlusInfinity);
 }
 
 TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
@@ -411,25 +411,25 @@ TEST_CASE("Solver handles complete running example",
   REQUIRE(state["i0"].getUpper().value == 0);
 
   REQUIRE(state["i1"].getLower().value == 0);
-  REQUIRE(state["i1"].getUpper().value == 99);
+  REQUIRE(state["i1"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["i2"].getLower().value == 1);
-  REQUIRE(state["i2"].getUpper().value == 99);
+  REQUIRE(state["i2"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["it"].getLower().value == 0);
-  REQUIRE(state["it"].getUpper().value == 98);
+  REQUIRE(state["it"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["j0"].getLower().value == 0);
   REQUIRE(state["j0"].getUpper().value == 99);
 
   REQUIRE(state["j1"].getLower().value == -1);
-  REQUIRE(state["j1"].getUpper().value == 99);
+  REQUIRE(state["j1"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["j2"].getLower().value == -1);
-  REQUIRE(state["j2"].getUpper().value == 98);
+  REQUIRE(state["j2"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["jt"].getLower().value == 0);
-  REQUIRE(state["jt"].getUpper().value == 99);
+  REQUIRE(state["jt"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["k0"].getLower().value == 0);
   REQUIRE(state["k0"].getUpper().value == 0);
@@ -558,4 +558,41 @@ TEST_CASE("Solver and ConstraintGraph Integration: Complete Running Example",
   REQUIRE(state["kt"].getUpper().value == 99);
   REQUIRE(state["kf"].getLower().value == 100);
   REQUIRE(state["kf"].getUpper().value == 100);
+}
+
+TEST_CASE("Solver and ConstraintGraph Integration: TooLong example",
+          "[solver][graph][integration]") {
+  
+  AbstractState state;
+  ConstraintGraph graph;
+
+  using Bound = AnalyzedValue::Bound;
+  using Type = Bound::Type;
+
+  auto const_0 = std::make_shared<InitializationConstraint>("const_0", 0);
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+
+  auto tooLong_0 = std::make_shared<PhiConstraint>("tooLong_0", std::vector<std::string>{"const_0", "tooLong_1"});
+  auto tooLong_1 = std::make_shared<PhiConstraint>("tooLong_1", std::vector<std::string>{"const_1", "tooLong_0"});
+
+  graph.addConstraint(const_0);
+  graph.addConstraint(const_1);
+  graph.addConstraint(tooLong_0);
+  graph.addConstraint(tooLong_1);
+
+  // ==========================================
+  // O teste real da sua arquitetura:
+  // ==========================================
+  auto sccs = graph.getTopologicalSCCs();
+  
+  Solver solver(state);
+  solver.solve(sccs);
+
+  // ==========================================
+  // Verificação matemática
+  // ==========================================
+  REQUIRE(state["tooLong_0"].getLower().value == 0);
+  REQUIRE(state["tooLong_0"].getUpper().value == 1);
+  REQUIRE(state["tooLong_1"].getLower().value == 0);
+  REQUIRE(state["tooLong_1"].getUpper().value == 1);
 }
