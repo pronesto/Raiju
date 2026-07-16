@@ -75,8 +75,6 @@ TEST_CASE("AbstractValue - Lattice Join Operations", "[lattice]") {
 }
 
 TEST_CASE("AbstractValue - Bound Equality Operators", "[lattice][equality]") {
-  using Bound = AbstractValue<3>::Bound;
-
   SECTION("Constant bounds match based on exact value") {
     Bound b1{Bound::Type::Constant, 42};
     Bound b2{Bound::Type::Constant, 42};
@@ -187,7 +185,6 @@ TEST_CASE("AbstractValue - Lattice Structural Equality",
 
 TEST_CASE("AbstractValue - Bound Relational Operators",
           "[lattice][comparison]") {
-  using Bound = AbstractValue<3>::Bound;
 
   SECTION("Constant vs Constant comparisons") {
     Bound b_low{Bound::Type::Constant, 10};
@@ -294,13 +291,13 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
 
     AbstractValue<3> infinite_top;
     infinite_top.setAsInterval(
-        {AbstractValue<3>::Bound::Type::Constant, 100},
-        {AbstractValue<3>::Bound::Type::PlusInfinity, 0});
+        {Bound::Type::Constant, 100},
+        {Bound::Type::PlusInfinity, 0});
 
     AbstractValue<3> infinite_bottom;
     infinite_bottom.setAsInterval(
-        {AbstractValue<3>::Bound::Type::MinusInfinity, 0},
-        {AbstractValue<3>::Bound::Type::Constant, -5});
+        {Bound::Type::MinusInfinity, 0},
+        {Bound::Type::Constant, -5});
 
     REQUIRE(interval < infinite_top);
     REQUIRE(infinite_bottom < interval);

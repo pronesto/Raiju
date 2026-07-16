@@ -76,47 +76,47 @@ bool AddConstraint::eval(AbstractState& A) {
   }
 
   // Otherwise treat every operand as a strided interval.
-  auto getLower = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
+  auto getLower = [](const AnalyzedValue &v) -> Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
-      return {AnalyzedValue::Bound::Type::Constant,
+      return {Bound::Type::Constant,
               *v.getValues().begin()};
     }
     return v.getLower();
   };
 
-  auto getUpper = [](const AnalyzedValue &v) -> AnalyzedValue::Bound {
+  auto getUpper = [](const AnalyzedValue &v) -> Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
       if (v.getValues().empty())
-        return {AnalyzedValue::Bound::Type::Constant,
+        return {Bound::Type::Constant,
               *v.getValues().begin()};
               
-      return {AnalyzedValue::Bound::Type::Constant,
+      return {Bound::Type::Constant,
               *v.getValues().rbegin()};
     }
     return v.getUpper();
   };
 
   auto addLower =
-      [](const AnalyzedValue::Bound &a,
-         const AnalyzedValue::Bound &b) -> AnalyzedValue::Bound {
+      [](const Bound &a,
+         const Bound &b) -> Bound {
 
-    if (a.type == AnalyzedValue::Bound::Type::MinusInfinity ||
-        b.type == AnalyzedValue::Bound::Type::MinusInfinity)
-      return {AnalyzedValue::Bound::Type::MinusInfinity, 0};
+    if (a.type == Bound::Type::MinusInfinity ||
+        b.type == Bound::Type::MinusInfinity)
+      return {Bound::Type::MinusInfinity, 0};
 
-    return {AnalyzedValue::Bound::Type::Constant,
+    return {Bound::Type::Constant,
             a.value + b.value};
   };
 
   auto addUpper =
-      [](const AnalyzedValue::Bound &a,
-         const AnalyzedValue::Bound &b) -> AnalyzedValue::Bound {
+      [](const Bound &a,
+         const Bound &b) -> Bound {
 
-    if (a.type == AnalyzedValue::Bound::Type::PlusInfinity ||
-        b.type == AnalyzedValue::Bound::Type::PlusInfinity)
-      return {AnalyzedValue::Bound::Type::PlusInfinity, 0};
+    if (a.type == Bound::Type::PlusInfinity ||
+        b.type == Bound::Type::PlusInfinity)
+      return {Bound::Type::PlusInfinity, 0};
 
-    return {AnalyzedValue::Bound::Type::Constant,
+    return {Bound::Type::Constant,
             a.value + b.value};
   };
 
@@ -146,22 +146,22 @@ IntersectionConstraint::IntersectionConstraint(std::string dest,
     : Constraint(std::move(dest)), operand(std::move(src)),
       lower_bound(std::move(low)), upper_bound(std::move(up)) {}
 
-AnalyzedValue::Bound
+Bound
 IntersectionConstraint::resolveBound(const IntersectionBound &b,
                                      const bool isLower,
                                      const AbstractState &) const {
 
-  if (std::holds_alternative<AnalyzedValue::Bound>(b))
-    return std::get<AnalyzedValue::Bound>(b);
+  if (std::holds_alternative<Bound>(b))
+    return std::get<Bound>(b);
 
   // Growth phase:
   // ignore symbolic references
-  AnalyzedValue::Bound result;
+  Bound result;
 
   if (isLower)
-    result.type = AnalyzedValue::Bound::Type::MinusInfinity;
+    result.type = Bound::Type::MinusInfinity;
   else
-    result.type = AnalyzedValue::Bound::Type::PlusInfinity;
+    result.type = Bound::Type::PlusInfinity;
 
   result.value = 0;
   return result;
@@ -171,7 +171,7 @@ IntersectionConstraint
 IntersectionConstraint::resolveFutures(const AbstractState &state) const {
   auto resolve = [&](const IntersectionBound &bound,
       bool isLower) -> IntersectionBound {
-    if (std::holds_alternative<AnalyzedValue::Bound>(bound))
+    if (std::holds_alternative<Bound>(bound))
       return bound;
 
     const Future &future = std::get<Future>(bound);
@@ -179,11 +179,11 @@ IntersectionConstraint::resolveFutures(const AbstractState &state) const {
     auto it = state.find(future.target_variable);
     assert(it != state.end());
 
-    AnalyzedValue::Bound result =
+    Bound result =
       isLower ? it->second.getLower()
       : it->second.getUpper();
 
-    if (result.type == AnalyzedValue::Bound::Type::Constant)
+    if (result.type == Bound::Type::Constant)
       result.value += future.offset;
 
     return result;
@@ -217,9 +217,9 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     std::vector<int> vals;
     for (int v : src.getValues()) {
       bool keep = true;
-      if (low.type == AnalyzedValue::Bound::Type::Constant)
+      if (low.type == Bound::Type::Constant)
         keep &= (v >= low.value);
-      if (up.type == AnalyzedValue::Bound::Type::Constant)
+      if (up.type == Bound::Type::Constant)
         keep &= (v <= up.value);
       if (keep)
         vals.emplace_back(v);
@@ -235,24 +235,24 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     auto upper = src.getUpper();
 
     // max(lower, low)
-    if (low.type == AnalyzedValue::Bound::Type::Constant) {
-      if (lower.type == AnalyzedValue::Bound::Type::MinusInfinity)
+    if (low.type == Bound::Type::Constant) {
+      if (lower.type == Bound::Type::MinusInfinity)
         lower = low;
-      else if (lower.type == AnalyzedValue::Bound::Type::Constant)
+      else if (lower.type == Bound::Type::Constant)
         lower.value = std::max(lower.value, low.value);
     }
 
     // min(upper, up)
-    if (up.type == AnalyzedValue::Bound::Type::Constant) {
-      if (upper.type == AnalyzedValue::Bound::Type::PlusInfinity)
+    if (up.type == Bound::Type::Constant) {
+      if (upper.type == Bound::Type::PlusInfinity)
         upper = up;
-      else if (upper.type == AnalyzedValue::Bound::Type::Constant)
+      else if (upper.type == Bound::Type::Constant)
         upper.value = std::min(upper.value, up.value);
     }
 
     // Empty interval?
-    if (lower.type == AnalyzedValue::Bound::Type::Constant &&
-        upper.type == AnalyzedValue::Bound::Type::Constant &&
+    if (lower.type == Bound::Type::Constant &&
+        upper.type == Bound::Type::Constant &&
         lower.value > upper.value) {
       // Leave result as bottom.
     } else {

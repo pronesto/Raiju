@@ -152,7 +152,7 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
 
     REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
 
-    REQUIRE(result.getLower().type == AnalyzedValue::Bound::Type::Constant);
+    REQUIRE(result.getLower().type == Bound::Type::Constant);
     REQUIRE(result.getLower().value == 11);
 
     REQUIRE(result.getUpper().value == 23);
@@ -172,11 +172,11 @@ TEST_CASE("Intersection with constant upper bound",
 
   state["x"] = v;
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
-  AnalyzedValue::Bound five;
-  five.type = AnalyzedValue::Bound::Type::Constant;
+  Bound five;
+  five.type = Bound::Type::Constant;
   five.value = 5;
 
   IntersectionConstraint C("y", "x", minusInf, five);
@@ -194,24 +194,24 @@ TEST_CASE("Intersection narrows interval", "[constraints][intersect]") {
 
   AnalyzedValue x;
 
-  AnalyzedValue::Bound low;
-  low.type = AnalyzedValue::Bound::Type::Constant;
+  Bound low;
+  low.type = Bound::Type::Constant;
   low.value = 0;
 
-  AnalyzedValue::Bound up;
-  up.type = AnalyzedValue::Bound::Type::Constant;
+  Bound up;
+  up.type = Bound::Type::Constant;
   up.value = 100;
 
   x.setAsInterval(low, up, 1);
 
   state["x"] = x;
 
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   IntersectionConstraint C("y", "x", ten, twenty);
@@ -234,8 +234,8 @@ TEST_CASE("Growth phase ignores futures", "[constraints][intersect]") {
 
   IntersectionConstraint::Future F{"y", -1};
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
   IntersectionConstraint C("z", "x", minusInf, F);
 
@@ -250,28 +250,28 @@ TEST_CASE("Narrowing recovers from MinusInfinity lower bound",
 
   // Set up operand x = [0, 50]
   AnalyzedValue x;
-  AnalyzedValue::Bound zero, fifty;
-  zero.type = AnalyzedValue::Bound::Type::Constant;
+  Bound zero, fifty;
+  zero.type = Bound::Type::Constant;
   zero.value = 0;
-  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  fifty.type = Bound::Type::Constant;
   fifty.value = 50;
   x.setAsInterval(zero, fifty, 1);
   state["x"] = x;
 
   // Set up destination y old state = [-Infinity, 100]
   AnalyzedValue y_old;
-  AnalyzedValue::Bound minusInf, hundred;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
-  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  Bound minusInf, hundred;
+  minusInf.type = Bound::Type::MinusInfinity;
+  hundred.type = Bound::Type::Constant;
   hundred.value = 100;
   y_old.setAsInterval(minusInf, hundred, 1);
   state["y"] = y_old;
 
   // Constraint: y = x intersection [10, 20] -> eval(state) will yield [10, 20]
-  AnalyzedValue::Bound ten, twenty;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten, twenty;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
   IntersectionConstraint C("y", "x", ten, twenty);
 
@@ -291,10 +291,10 @@ TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
 
   // Set up operand x = [0, 100]
   AnalyzedValue x;
-  AnalyzedValue::Bound zero, hundred;
-  zero.type = AnalyzedValue::Bound::Type::Constant;
+  Bound zero, hundred;
+  zero.type = Bound::Type::Constant;
   zero.value = 0;
-  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  hundred.type = Bound::Type::Constant;
   hundred.value = 100;
   x.setAsInterval(zero, hundred, 1);
   state["x"] = x;
@@ -305,8 +305,8 @@ TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
 
   // Constraint: y = x intersection [0, 50] -> eval(state) yields [0, 50]
   // Lower bounds match (0 == 0), but upper bound shrinks (50 < 100)
-  AnalyzedValue::Bound fifty;
-  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound fifty;
+  fifty.type = Bound::Type::Constant;
   fifty.value = 50;
   IntersectionConstraint C("y", "x", zero, fifty);
 
@@ -324,10 +324,10 @@ TEST_CASE("Narrowing reaches a fixed point and returns false",
 
   // Set up operand x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten, twenty;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten, twenty;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
   x.setAsInterval(ten, twenty, 1);
   state["x"] = x;
@@ -353,19 +353,19 @@ TEST_CASE("Resolve future lower bound",
 
   // x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   x.setAsInterval(ten, twenty);
   state["x"] = x;
 
-  AnalyzedValue::Bound plusInf;
-  plusInf.type = AnalyzedValue::Bound::Type::PlusInfinity;
+  Bound plusInf;
+  plusInf.type = Bound::Type::PlusInfinity;
 
   IntersectionConstraint::Future future{"x", 3};
 
@@ -381,8 +381,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound{Bound::Type::Constant, 0},
+      Bound{Bound::Type::Constant, 30});
 
   dummy["z"] = z;
 
@@ -390,8 +390,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 13},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound{Bound::Type::Constant, 13},
+      Bound{Bound::Type::Constant, 30});
 
   REQUIRE(dummy["y"] == expected);
 }
@@ -403,19 +403,19 @@ TEST_CASE("Resolve future upper bound",
 
   // x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   x.setAsInterval(ten, twenty);
   state["x"] = x;
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
   IntersectionConstraint::Future future{"x", -2};
 
@@ -431,8 +431,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound{Bound::Type::Constant, 0},
+      Bound{Bound::Type::Constant, 30});
 
   dummy["z"] = z;
 
@@ -440,8 +440,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 18});
+      Bound{Bound::Type::Constant, 0},
+      Bound{Bound::Type::Constant, 18});
 
   REQUIRE(dummy["y"] == expected);
 }

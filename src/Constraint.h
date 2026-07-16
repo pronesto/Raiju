@@ -52,7 +52,6 @@ public:
      * false if the domain remained unchanged (indicating a fixed point).
      */
     bool narrow(AbstractState& A) {
-      using Bound = AnalyzedValue::Bound;
       using Type  = Bound::Type;
 
       AnalyzedValue oldY = A[def];   // I[Y]
@@ -220,11 +219,11 @@ public:
 
     // An intersection boundary can be a literal Constant, an Infinity, or a
     // Future
-    using IntersectionBound = std::variant<AnalyzedValue::Bound, Future>;
+    using IntersectionBound = std::variant<Bound, Future>;
 
     friend std::ostream& operator<<(std::ostream& os, const IntersectionBound b) {
-        if (std::holds_alternative<AnalyzedValue::Bound>(b)) {
-            os << std::get<AnalyzedValue::Bound>(b);
+        if (std::holds_alternative<Bound>(b)) {
+            os << std::get<Bound>(b);
         } else {
             const Future &f = std::get<Future>(b);
             os << "f(" << f.target_variable << ")";
@@ -245,9 +244,9 @@ private:
     IntersectionBound lower_bound;
     IntersectionBound upper_bound;
 
-    // Helper to resolve a variant bound into a concrete AnalyzedValue::Bound
+    // Helper to resolve a variant bound into a concrete Bound
     // at runtime
-    AnalyzedValue::Bound resolveBound(
+    Bound resolveBound(
         const IntersectionBound& b,
         const bool isLower,
         const AbstractState& A

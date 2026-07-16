@@ -14,7 +14,6 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   AbstractState state;
 
   // Helper shorthand types from your Constraint.h definitions
-  using Bound = AnalyzedValue::Bound;
   using Type = Bound::Type;
   using InterBound = IntersectionConstraint::IntersectionBound;
 
@@ -104,18 +103,18 @@ TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
   // k1 widens to [0,+inf].
   REQUIRE(state["k1"].getKind() == AnalyzedValue::Kind::StridedInterval);
   REQUIRE(state["k1"].getLower().type ==
-          AnalyzedValue::Bound::Type::Constant);
+          Bound::Type::Constant);
   REQUIRE(state["k1"].getLower().value == 0);
   REQUIRE(state["k1"].getUpper().type ==
-          AnalyzedValue::Bound::Type::PlusInfinity);
+          Bound::Type::PlusInfinity);
 
   // k2 = k1 + 1 = [1,+inf].
   REQUIRE(state["k2"].getKind() == AnalyzedValue::Kind::StridedInterval);
   REQUIRE(state["k2"].getLower().type ==
-          AnalyzedValue::Bound::Type::Constant);
+          Bound::Type::Constant);
   REQUIRE(state["k2"].getLower().value == 1);
   REQUIRE(state["k2"].getUpper().type ==
-          AnalyzedValue::Bound::Type::PlusInfinity);
+          Bound::Type::PlusInfinity);
 }
 
 TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bound",
@@ -123,7 +122,7 @@ TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bou
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   // 2. Re-instantiate the same system of constraints
@@ -178,7 +177,7 @@ TEST_CASE("Solver resolves future bounds during solve",
 
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type  = Bound::Type;
 
   auto c1    = std::make_shared<InitializationConstraint>("const_1", 1);
@@ -230,7 +229,7 @@ TEST_CASE("Solver handles mutually recursive future bounds",
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type  = Bound::Type;
 
   // Constants
@@ -334,7 +333,7 @@ TEST_CASE("Solver handles complete running example",
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   // 2. Re-instantiate the same system of constraints
@@ -453,7 +452,7 @@ TEST_CASE("Solver and ConstraintGraph Integration: Complete Running Example",
   AbstractState state;
   ConstraintGraph graph;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
@@ -566,7 +565,7 @@ TEST_CASE("Solver and ConstraintGraph Integration: TooLong example",
   AbstractState state;
   ConstraintGraph graph;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   auto const_0 = std::make_shared<InitializationConstraint>("const_0", 0);
