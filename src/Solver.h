@@ -51,7 +51,9 @@ public:
    * future resolution, and the monotonic narrowing phase until a fixed point is
    * met.
    */
-  void solve();
+  void resolveSCC();
+  void solve(std::vector<std::vector<std::shared_ptr<Constraint>>>& sccs);
+  void clear();
 
   /**
    * @brief Runs the initial growth (widening) analysis loop.
