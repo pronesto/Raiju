@@ -11,10 +11,53 @@ void Solver::addConstraint(std::shared_ptr<Constraint> constraint) {
   constraints.push_back(constraint);
 }
 
-void Solver::solve() {
+void Solver::clear(){
+   constraints.clear();
+}
+
+void Solver::resolveSCC() {
+  std::cout << "\nSolver called for the following constraints:\n";
+  for (auto &constraint : this->constraints) {
+      std::cout << "\t" << constraint << "\n";
+  }
+
+  std::cout << "Solver state:\n";
+  for (auto [var, val] : state) {
+    std::cout << "\t" << var << " = " << val << "\n"; 
+  }
+  std::cout << "\n";
+
   growthAnalysis();
+  std::cout << "\nState after growth analysis:\n";
+  for (auto const& [var, val] : state) {
+    std::cout << var << " = " << val << "\n";
+  }
+
+  // Make counters useless after growth analysis
+  for (auto const& [var, val] : state) {
+    state[var].resetCounter();
+  }
+
   futureResolution();
+  std::cout << "\nState after future resolution\n";
+  for (auto const& [var, val] : state) {
+    std::cout << var << " = " << val << "\n";
+  }
   narrowingAnalysis();
+  std::cout << "\nState after narrowing analysis\n";
+  for (auto const& [var, val] : state) {
+    std::cout << var << " = " << val << "\n";
+  }
+  clear();
+}
+
+void Solver::solve(std::vector<std::vector<std::shared_ptr<Constraint>>>& sccs) {
+   for (auto &scc : sccs) {
+      for (auto &constraint : scc) {
+         addConstraint(constraint);
+      }
+      resolveSCC();
+   }
 }
 
 void Solver::growthAnalysis() {
@@ -23,20 +66,12 @@ void Solver::growthAnalysis() {
 
   while (changed_evaluating) {
     changed_evaluating = false;
-    std::cout << "\n--- Growth Iteration " << ++iteration << " ---\n";
+    ++iteration;
 
     for (auto &constraint : constraints) {
       if (constraint->eval(this->state)) {
-        std::cout << "Growth changed: " << constraint->variable_name << ":"
-          << state[constraint->variable_name] << "\n";
         changed_evaluating = true;
       }
-    }
-
-    // Print the state of your variables. That's just for debugging. We can
-    // remove that later on.
-    for (auto const& [var, val] : state) {
-      std::cout << var << " = " << val << "\n";
     }
   }
 }
@@ -49,8 +84,6 @@ void Solver::narrowingAnalysis() {
 
     for (auto &constraint : constraints) {
       if (constraint->narrow(this->state)) {
-        std::cout << "Narrowing changed: " << constraint->variable_name << ":"
-          << state[constraint->variable_name] << "\n";
         changed_narrowing = true;
       }
     }

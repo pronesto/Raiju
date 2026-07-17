@@ -19,7 +19,8 @@ TEST_CASE("Constraints - InitializationConstraint Behavior", "[constraints]") {
 
     // Running a quick self-join test to prove 42 is tracked inside the set
     AnalyzedValue expected;
-    expected.addConstant(42);
+    std::vector<int> vals = {42};
+    expected.addConstant(vals);
     REQUIRE(state["x0"] == expected);
   }
 
@@ -52,8 +53,8 @@ TEST_CASE("Constraints - PhiConstraint Behavior", "[constraints]") {
 
     // Expect x0 to hold the union {3, 5}
     AnalyzedValue expected;
-    expected.addConstant(3);
-    expected.addConstant(5);
+    std::vector<int> vals = {3,5};
+    expected.addConstant(vals);
     REQUIRE(state["x0"] == expected);
   }
 
@@ -96,15 +97,16 @@ TEST_CASE("Constraints - AddConstraint Pairwise Sets", "[constraints][add]") {
   // tool. But since state is an unordered_map, we can populate it directly in
   // the test!
 
+  // v1 = {2,3}
   AnalyzedValue v1;
-  v1.addConstant(2);
-  v1.addConstant(3);
+  std::vector<int> vals = {2,3};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   // v2 = {10, 20}
+  vals = {10,20};
   AnalyzedValue v2;
-  v2.addConstant(10);
-  v2.addConstant(20);
+  v2.addConstant(vals);
   state["v2"] = v2;
 
   // v0 = v1 + v2
@@ -119,10 +121,8 @@ TEST_CASE("Constraints - AddConstraint Pairwise Sets", "[constraints][add]") {
     // Expected unique combinations: 2+10=12, 2+20=22, 3+10=13, 3+20=23
     // Sorted: {12, 13, 22, 23} (Total size 4, which is <= N=4)
     AnalyzedValue expected;
-    expected.addConstant(12);
-    expected.addConstant(13);
-    expected.addConstant(22);
-    expected.addConstant(23);
+    std::vector<int> vals = {12, 13, 22, 23};
+    expected.addConstant(vals);
 
     REQUIRE(state["v0"] == expected);
   }
@@ -133,14 +133,13 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
   AbstractState state;
 
   AnalyzedValue v1;
-  v1.addConstant(1);
-  v1.addConstant(2);
-  v1.addConstant(3);
+  std::vector<int> vals = {1,2,3};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   AnalyzedValue v2;
-  v2.addConstant(10);
-  v2.addConstant(20);
+  vals = {10,20};
+  v2.addConstant(vals);
   state["v2"] = v2;
 
   AddConstraint add_v0("v0", "v1", "v2");
@@ -153,7 +152,7 @@ TEST_CASE("Constraints - AddConstraint Overflow and Interval Math",
 
     REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
 
-    REQUIRE(result.getLower().type == AnalyzedValue::Bound::Type::Constant);
+    REQUIRE(result.getLower().type == Bound::Type::Constant);
     REQUIRE(result.getLower().value == 11);
 
     REQUIRE(result.getUpper().value == 23);
@@ -168,17 +167,16 @@ TEST_CASE("Intersection with constant upper bound",
   AbstractState state;
 
   AnalyzedValue v;
-  v.addConstant(1);
-  v.addConstant(5);
-  v.addConstant(10);
+  std::vector<int> vals = {1,5,10};
+  v.addConstant(vals);
 
   state["x"] = v;
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
-  AnalyzedValue::Bound five;
-  five.type = AnalyzedValue::Bound::Type::Constant;
+  Bound five;
+  five.type = Bound::Type::Constant;
   five.value = 5;
 
   IntersectionConstraint C("y", "x", minusInf, five);
@@ -196,24 +194,24 @@ TEST_CASE("Intersection narrows interval", "[constraints][intersect]") {
 
   AnalyzedValue x;
 
-  AnalyzedValue::Bound low;
-  low.type = AnalyzedValue::Bound::Type::Constant;
+  Bound low;
+  low.type = Bound::Type::Constant;
   low.value = 0;
 
-  AnalyzedValue::Bound up;
-  up.type = AnalyzedValue::Bound::Type::Constant;
+  Bound up;
+  up.type = Bound::Type::Constant;
   up.value = 100;
 
   x.setAsInterval(low, up, 1);
 
   state["x"] = x;
 
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   IntersectionConstraint C("y", "x", ten, twenty);
@@ -229,16 +227,15 @@ TEST_CASE("Growth phase ignores futures", "[constraints][intersect]") {
   AbstractState state;
 
   AnalyzedValue x;
-  x.addConstant(1);
-  x.addConstant(5);
-  x.addConstant(10);
+  std::vector<int> vals = {1,5,10};
+  x.addConstant(vals);
 
   state["x"] = x;
 
   IntersectionConstraint::Future F{"y", -1};
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
   IntersectionConstraint C("z", "x", minusInf, F);
 
@@ -253,28 +250,28 @@ TEST_CASE("Narrowing recovers from MinusInfinity lower bound",
 
   // Set up operand x = [0, 50]
   AnalyzedValue x;
-  AnalyzedValue::Bound zero, fifty;
-  zero.type = AnalyzedValue::Bound::Type::Constant;
+  Bound zero, fifty;
+  zero.type = Bound::Type::Constant;
   zero.value = 0;
-  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  fifty.type = Bound::Type::Constant;
   fifty.value = 50;
   x.setAsInterval(zero, fifty, 1);
   state["x"] = x;
 
   // Set up destination y old state = [-Infinity, 100]
   AnalyzedValue y_old;
-  AnalyzedValue::Bound minusInf, hundred;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
-  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  Bound minusInf, hundred;
+  minusInf.type = Bound::Type::MinusInfinity;
+  hundred.type = Bound::Type::Constant;
   hundred.value = 100;
   y_old.setAsInterval(minusInf, hundred, 1);
   state["y"] = y_old;
 
   // Constraint: y = x intersection [10, 20] -> eval(state) will yield [10, 20]
-  AnalyzedValue::Bound ten, twenty;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten, twenty;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
   IntersectionConstraint C("y", "x", ten, twenty);
 
@@ -294,10 +291,10 @@ TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
 
   // Set up operand x = [0, 100]
   AnalyzedValue x;
-  AnalyzedValue::Bound zero, hundred;
-  zero.type = AnalyzedValue::Bound::Type::Constant;
+  Bound zero, hundred;
+  zero.type = Bound::Type::Constant;
   zero.value = 0;
-  hundred.type = AnalyzedValue::Bound::Type::Constant;
+  hundred.type = Bound::Type::Constant;
   hundred.value = 100;
   x.setAsInterval(zero, hundred, 1);
   state["x"] = x;
@@ -308,8 +305,8 @@ TEST_CASE("Narrowing tightens a finite upper bound", "[constraints][narrow]") {
 
   // Constraint: y = x intersection [0, 50] -> eval(state) yields [0, 50]
   // Lower bounds match (0 == 0), but upper bound shrinks (50 < 100)
-  AnalyzedValue::Bound fifty;
-  fifty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound fifty;
+  fifty.type = Bound::Type::Constant;
   fifty.value = 50;
   IntersectionConstraint C("y", "x", zero, fifty);
 
@@ -327,10 +324,10 @@ TEST_CASE("Narrowing reaches a fixed point and returns false",
 
   // Set up operand x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten, twenty;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten, twenty;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
   x.setAsInterval(ten, twenty, 1);
   state["x"] = x;
@@ -356,19 +353,19 @@ TEST_CASE("Resolve future lower bound",
 
   // x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   x.setAsInterval(ten, twenty);
   state["x"] = x;
 
-  AnalyzedValue::Bound plusInf;
-  plusInf.type = AnalyzedValue::Bound::Type::PlusInfinity;
+  Bound plusInf;
+  plusInf.type = Bound::Type::PlusInfinity;
 
   IntersectionConstraint::Future future{"x", 3};
 
@@ -384,8 +381,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound::constant(0),
+      Bound::constant(30));
 
   dummy["z"] = z;
 
@@ -393,8 +390,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 13},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound::constant(13),
+      Bound::constant(30));
 
   REQUIRE(dummy["y"] == expected);
 }
@@ -406,19 +403,19 @@ TEST_CASE("Resolve future upper bound",
 
   // x = [10, 20]
   AnalyzedValue x;
-  AnalyzedValue::Bound ten;
-  ten.type = AnalyzedValue::Bound::Type::Constant;
+  Bound ten;
+  ten.type = Bound::Type::Constant;
   ten.value = 10;
 
-  AnalyzedValue::Bound twenty;
-  twenty.type = AnalyzedValue::Bound::Type::Constant;
+  Bound twenty;
+  twenty.type = Bound::Type::Constant;
   twenty.value = 20;
 
   x.setAsInterval(ten, twenty);
   state["x"] = x;
 
-  AnalyzedValue::Bound minusInf;
-  minusInf.type = AnalyzedValue::Bound::Type::MinusInfinity;
+  Bound minusInf;
+  minusInf.type = Bound::Type::MinusInfinity;
 
   IntersectionConstraint::Future future{"x", -2};
 
@@ -434,8 +431,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 30});
+      Bound::constant(0),
+      Bound::constant(30));
 
   dummy["z"] = z;
 
@@ -443,8 +440,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 0},
-      AnalyzedValue::Bound{AnalyzedValue::Bound::Type::Constant, 18});
+      Bound::constant(0),
+      Bound::constant(18));
 
   REQUIRE(dummy["y"] == expected);
 }
@@ -455,14 +452,13 @@ TEST_CASE("Constraints - MultiplyConstraint Overflow",
     AbstractState state;
 
     AnalyzedValue a;
-    a.addConstant(1);
-    a.addConstant(2);
-    a.addConstant(3);
+    std::vector<int> vals = {1,2,3};
+    a.addConstant(vals);
     state["a"] = a;
 
+    vals = {10,20};
     AnalyzedValue b;
-    b.addConstant(10);
-    b.addConstant(20);
+    b.addConstant(vals);
     state["b"] = b;
 
     MultiplyConstraint multiply("c", "a", "b");
@@ -478,7 +474,7 @@ TEST_CASE("Constraints - MultiplyConstraint Overflow",
         REQUIRE(result.getLower().value == 10);
         REQUIRE(result.getUpper().value == 60);
         
-        REQUIRE(result.getStride() == 1);
+        REQUIRE(result.getStride() == 10);
     }
 }
 
@@ -487,11 +483,13 @@ TEST_CASE("Constraints - MultiplyConstraint Fixed Point",
   AbstractState state;
 
   AnalyzedValue a;
-  a.addConstant(6);
+  std::vector<int> vals = {6};
+  a.addConstant(vals);
   state["a"] = a;
 
+  vals = {7};
   AnalyzedValue b;
-  b.addConstant(7);
+  b.addConstant(vals);
   state["b"] = b;
 
   MultiplyConstraint multiply("c", "a", "b");
@@ -508,19 +506,22 @@ TEST_CASE("Constraints - MultiplyConstraint With Zero",
   AbstractState state;
 
   AnalyzedValue a;
-  a.addConstant(0);
+  std::vector<int> vals = {0};
+  a.addConstant(vals);
   state["a"] = a;
 
+  vals = {5};
   AnalyzedValue b;
-  b.addConstant(5);
+  b.addConstant(vals);
   state["b"] = b;
 
   MultiplyConstraint multiply("c", "a", "b");
 
   REQUIRE(multiply.eval(state));
 
+  vals = {0};
   AnalyzedValue expected;
-  expected.addConstant(0);
+  expected.addConstant(vals);
 
   REQUIRE(state["c"] == expected);
 }
@@ -530,19 +531,22 @@ TEST_CASE("Constraints - MultiplyConstraint Negative Values",
   AbstractState state;
 
   AnalyzedValue a;
-  a.addConstant(-2);
+  std::vector<int> vals = {-2};
+  a.addConstant(vals);
   state["a"] = a;
 
+  vals = {4};
   AnalyzedValue b;
-  b.addConstant(4);
+  b.addConstant(vals);
   state["b"] = b;
 
   MultiplyConstraint multiply("c", "a", "b");
 
   REQUIRE(multiply.eval(state));
 
+  vals = {-8};
   AnalyzedValue expected;
-  expected.addConstant(-8);
+  expected.addConstant(vals);
 
   REQUIRE(state["c"] == expected);
 }
@@ -552,9 +556,8 @@ TEST_CASE("Constraints - LinearConstraint Set Behavior", "[constraints][linear]"
 
   // v1 = {1, 2, 3}
   AnalyzedValue v1;
-  v1.addConstant(1);
-  v1.addConstant(2);
-  v1.addConstant(3);
+  std::vector<int> vals = {1,2,3};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   // v0 = 2 * v1 + 5
@@ -568,9 +571,8 @@ TEST_CASE("Constraints - LinearConstraint Set Behavior", "[constraints][linear]"
     REQUIRE(state["v0"].getKind() == AnalyzedValue::Kind::Set);
 
     AnalyzedValue expected;
-    expected.addConstant(7);
-    expected.addConstant(9);
-    expected.addConstant(11);
+    std::vector<int> vals = {7,9,11};
+    expected.addConstant(vals);
 
     REQUIRE(state["v0"] == expected);
   }
@@ -586,8 +588,8 @@ TEST_CASE("Constraints - LinearConstraint Interval Behavior", "[constraints][lin
 
   // v1 = [10, 20]
   AnalyzedValue v1;
-  AnalyzedValue::Bound low = {AnalyzedValue::Bound::Type::Constant, 10};
-  AnalyzedValue::Bound up = {AnalyzedValue::Bound::Type::Constant, 20};
+  Bound low = Bound::constant(10);
+  Bound up = Bound::constant(20);
   v1.setAsInterval(low, up, 1);
   state["v1"] = v1;
 
@@ -611,8 +613,8 @@ TEST_CASE("Constraints - LinearConstraint Negative Multiplier", "[constraints][l
 
   // v1 = [0, 10]
   AnalyzedValue v1;
-  v1.setAsInterval({AnalyzedValue::Bound::Type::Constant, 0}, 
-                   {AnalyzedValue::Bound::Type::Constant, 10}, 1);
+  v1.setAsInterval(Bound::constant(0), 
+                   Bound::constant(10), 1);
   state["v1"] = v1;
 
   // v0 = -1 * v1 + 5
@@ -635,7 +637,8 @@ TEST_CASE("Constraints - LinearConstraint Identity", "[constraints][linear]") {
   AbstractState state;
 
   AnalyzedValue v1;
-  v1.addConstant(42);
+  std::vector<int> vals = {42};
+  v1.addConstant(vals);
   state["v1"] = v1;
 
   LinearConstraint identity("v0", "v1", 1, 0);

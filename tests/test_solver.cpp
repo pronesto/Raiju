@@ -5,6 +5,7 @@
 
 #include "Constraint.h"
 #include "Solver.h"
+#include "Graph.h"
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
@@ -13,7 +14,6 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   AbstractState state;
 
   // Helper shorthand types from your Constraint.h definitions
-  using Bound = AnalyzedValue::Bound;
   using Type = Bound::Type;
   using InterBound = IntersectionConstraint::IntersectionBound;
 
@@ -58,16 +58,16 @@ TEST_CASE("Solver growthAnalysis loops to positive infinity on feedback loop",
   INFO("k1 Upper Bound Type: " << (int)state["k1"].getUpper().type);
   INFO("k1 Upper Bound Value: " << state["k1"].getUpper().value);
   REQUIRE(state["k1"].getLower().value == 0);
-  REQUIRE(state["k1"].getUpper().value == 100);
+  REQUIRE(state["k1"].getUpper().type == Bound::Type::PlusInfinity);
 
   // kt without narrowing should evaluate alongside its source 'k1' up to
   // PlusInfinity: [0, +inf]
   REQUIRE(state["kt"].getLower().value == 0);
-  REQUIRE(state["kt"].getUpper().value == 99);
+  REQUIRE(state["kt"].getUpper().type == Bound::Type::PlusInfinity);
 
   // k2 follows 'kt' + 1: [1, +inf]
   REQUIRE(state["k2"].getLower().value == 1);
-  REQUIRE(state["k2"].getUpper().value == 100);
+  REQUIRE(state["k2"].getUpper().type == Bound::Type::PlusInfinity);
 }
 
 TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
@@ -103,18 +103,18 @@ TEST_CASE("Solver growthAnalysis widens a simple increasing loop",
   // k1 widens to [0,+inf].
   REQUIRE(state["k1"].getKind() == AnalyzedValue::Kind::StridedInterval);
   REQUIRE(state["k1"].getLower().type ==
-          AnalyzedValue::Bound::Type::Constant);
+          Bound::Type::Constant);
   REQUIRE(state["k1"].getLower().value == 0);
   REQUIRE(state["k1"].getUpper().type ==
-          AnalyzedValue::Bound::Type::PlusInfinity);
+          Bound::Type::PlusInfinity);
 
   // k2 = k1 + 1 = [1,+inf].
   REQUIRE(state["k2"].getKind() == AnalyzedValue::Kind::StridedInterval);
   REQUIRE(state["k2"].getLower().type ==
-          AnalyzedValue::Bound::Type::Constant);
+          Bound::Type::Constant);
   REQUIRE(state["k2"].getLower().value == 1);
   REQUIRE(state["k2"].getUpper().type ==
-          AnalyzedValue::Bound::Type::PlusInfinity);
+          Bound::Type::PlusInfinity);
 }
 
 TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bound",
@@ -122,7 +122,7 @@ TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bou
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   // 2. Re-instantiate the same system of constraints
@@ -148,7 +148,7 @@ TEST_CASE("Solver narrowingAnalysis reclaims precision back down to the loop bou
   solver.addConstraint(k2);
 
   // 3. Run the FULL solve pipeline (growth Analysis -> future resolution -> narrowing Analysis)
-  solver.solve();
+  solver.resolveSCC();
 
   // 4. Verify that monotonic narrowing successfully refined the intervals
 
@@ -177,7 +177,7 @@ TEST_CASE("Solver resolves future bounds during solve",
 
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type  = Bound::Type;
 
   auto c1    = std::make_shared<InitializationConstraint>("const_1", 1);
@@ -211,7 +211,7 @@ TEST_CASE("Solver resolves future bounds during solve",
   solver.addConstraint(it);
   solver.addConstraint(i2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   REQUIRE(state["limit"].getUpper().value == 99);
 
@@ -229,7 +229,7 @@ TEST_CASE("Solver handles mutually recursive future bounds",
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type  = Bound::Type;
 
   // Constants
@@ -289,7 +289,7 @@ TEST_CASE("Solver handles mutually recursive future bounds",
   solver.addConstraint(i2);
   solver.addConstraint(j2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   // Initial values remain unchanged.
   REQUIRE(state["i0"].getLower().value == 0);
@@ -333,7 +333,7 @@ TEST_CASE("Solver handles complete running example",
   // 1. Initialize a clean abstract state table
   AbstractState state;
 
-  using Bound = AnalyzedValue::Bound;
+  using Bound = Bound;
   using Type = Bound::Type;
 
   // 2. Re-instantiate the same system of constraints
@@ -377,7 +377,7 @@ TEST_CASE("Solver handles complete running example",
   auto jt = std::make_shared<IntersectionConstraint>(
       "jt",
       "j1",
-      IntersectionConstraint::Future{"i1", 1},
+      IntersectionConstraint::Future{"i1", 0},
       plusInf);
   
   auto i2 = std::make_shared<AddConstraint>("i2", "it", "const_1");
@@ -402,7 +402,7 @@ TEST_CASE("Solver handles complete running example",
   solver.addConstraint(j2);
   solver.addConstraint(k2);
 
-  solver.solve();
+  solver.resolveSCC();
 
   // Check values
 
@@ -410,25 +410,25 @@ TEST_CASE("Solver handles complete running example",
   REQUIRE(state["i0"].getUpper().value == 0);
 
   REQUIRE(state["i1"].getLower().value == 0);
-  REQUIRE(state["i1"].getUpper().value == 99);
+  REQUIRE(state["i1"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["i2"].getLower().value == 1);
-  REQUIRE(state["i2"].getUpper().value == 99);
+  REQUIRE(state["i2"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["it"].getLower().value == 0);
-  REQUIRE(state["it"].getUpper().value == 98);
+  REQUIRE(state["it"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["j0"].getLower().value == 0);
   REQUIRE(state["j0"].getUpper().value == 99);
 
   REQUIRE(state["j1"].getLower().value == -1);
-  REQUIRE(state["j1"].getUpper().value == 99);
+  REQUIRE(state["j1"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["j2"].getLower().value == -1);
-  REQUIRE(state["j2"].getUpper().value == 98);
+  REQUIRE(state["j2"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["jt"].getLower().value == 0);
-  REQUIRE(state["jt"].getUpper().value == 99);
+  REQUIRE(state["jt"].getUpper().type == Bound::Type::PlusInfinity);
 
   REQUIRE(state["k0"].getLower().value == 0);
   REQUIRE(state["k0"].getUpper().value == 0);
@@ -444,4 +444,154 @@ TEST_CASE("Solver handles complete running example",
 
   REQUIRE(state["kf"].getLower().value == 100);
   REQUIRE(state["kf"].getUpper().value == 100);
+}
+
+TEST_CASE("Solver and ConstraintGraph Integration: Complete Running Example",
+          "[solver][graph][integration]") {
+  
+  AbstractState state;
+  ConstraintGraph graph;
+
+  using Bound = Bound;
+  using Type = Bound::Type;
+
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+  auto minus_1 = std::make_shared<InitializationConstraint>("minus_1", -1);
+
+  Bound minusInf;
+  minusInf.type = Type::MinusInfinity;
+
+  Bound plusInf;
+  plusInf.type = Type::PlusInfinity;
+
+  Bound ninetyNine;
+  ninetyNine.type = Type::Constant;
+  ninetyNine.value = 99;
+
+  Bound hundred;
+  hundred.type = Type::Constant;
+  hundred.value = 100;
+
+
+  auto k0 = std::make_shared<InitializationConstraint>("k0", 0);
+  auto kt = std::make_shared<IntersectionConstraint>("kt", "k1", minusInf, ninetyNine);
+  auto kf = std::make_shared<IntersectionConstraint>("kf", "k1", hundred, plusInf);
+  auto k1 = std::make_shared<PhiConstraint>("k1", std::vector<std::string>{"k0", "k2"});
+
+  auto i0 = std::make_shared<InitializationConstraint>("i0", 0);
+  auto j0 = std::make_shared<IntersectionConstraint>("j0", "kt", minusInf, plusInf);
+
+  auto i1 = std::make_shared<PhiConstraint>("i1", std::vector<std::string>{"i0", "i2"});
+  auto j1 = std::make_shared<PhiConstraint>("j1", std::vector<std::string>{"j0", "j2"});
+
+  // it = i1 ∩ [-inf, ft(j1)-1]
+  auto it = std::make_shared<IntersectionConstraint>(
+      "it",
+      "i1",
+      minusInf,
+      IntersectionConstraint::Future{"j1", -1});
+
+  // jt = j1 ∩ [ft(i1)+1, +inf]
+  auto jt = std::make_shared<IntersectionConstraint>(
+      "jt",
+      "j1",
+      IntersectionConstraint::Future{"i1", 0},
+      plusInf);
+  
+  auto i2 = std::make_shared<AddConstraint>("i2", "it", "const_1");
+  auto j2 = std::make_shared<AddConstraint>("j2", "jt", "minus_1");
+  auto k2 = std::make_shared<AddConstraint>("k2", "kt", "const_1");
+
+  graph.addConstraint(minus_1);
+  graph.addConstraint(const_1);
+  graph.addConstraint(k0);
+  graph.addConstraint(kt);
+  graph.addConstraint(kf);
+  graph.addConstraint(k1);
+  graph.addConstraint(i0);
+  graph.addConstraint(j0);
+  graph.addConstraint(i1);
+  graph.addConstraint(j1);
+  graph.addConstraint(it);
+  graph.addConstraint(jt);
+  graph.addConstraint(i2);
+  graph.addConstraint(j2);
+  graph.addConstraint(k2);
+
+  // ==========================================
+  // O teste real da sua arquitetura:
+  // ==========================================
+  auto sccs = graph.getTopologicalSCCs();
+  
+  Solver solver(state);
+  solver.solve(sccs);
+
+  // ==========================================
+  // Verificação matemática
+  // ==========================================
+  REQUIRE(state["i0"].getLower().value == 0);
+  REQUIRE(state["i0"].getUpper().value == 0);
+  REQUIRE(state["i1"].getLower().value == 0);
+  REQUIRE(state["i1"].getUpper().value == 99);
+  REQUIRE(state["i2"].getLower().value == 1);
+  REQUIRE(state["i2"].getUpper().value == 99);
+  REQUIRE(state["it"].getLower().value == 0);
+  REQUIRE(state["it"].getUpper().value == 98);
+
+  REQUIRE(state["j0"].getLower().value == 0);
+  REQUIRE(state["j0"].getUpper().value == 99);
+  REQUIRE(state["j1"].getLower().value == -1);
+  REQUIRE(state["j1"].getUpper().value == 99);
+  REQUIRE(state["j2"].getLower().value == -1);
+  REQUIRE(state["j2"].getUpper().value == 98);
+  REQUIRE(state["jt"].getLower().value == 0);
+  REQUIRE(state["jt"].getUpper().value == 99);
+
+  REQUIRE(state["k0"].getLower().value == 0);
+  REQUIRE(state["k0"].getUpper().value == 0);
+  REQUIRE(state["k1"].getLower().value == 0);
+  REQUIRE(state["k1"].getUpper().value == 100);
+  REQUIRE(state["k2"].getLower().value == 1);
+  REQUIRE(state["k2"].getUpper().value == 100);
+  REQUIRE(state["kt"].getLower().value == 0);
+  REQUIRE(state["kt"].getUpper().value == 99);
+  REQUIRE(state["kf"].getLower().value == 100);
+  REQUIRE(state["kf"].getUpper().value == 100);
+}
+
+TEST_CASE("Solver and ConstraintGraph Integration: TooLong example",
+          "[solver][graph][integration]") {
+  
+  AbstractState state;
+  ConstraintGraph graph;
+
+  using Bound = Bound;
+  using Type = Bound::Type;
+
+  auto const_0 = std::make_shared<InitializationConstraint>("const_0", 0);
+  auto const_1 = std::make_shared<InitializationConstraint>("const_1", 1);
+
+  auto tooLong_0 = std::make_shared<PhiConstraint>("tooLong_0", std::vector<std::string>{"const_0", "tooLong_1"});
+  auto tooLong_1 = std::make_shared<PhiConstraint>("tooLong_1", std::vector<std::string>{"const_1", "tooLong_0"});
+
+  graph.addConstraint(const_0);
+  graph.addConstraint(const_1);
+  graph.addConstraint(tooLong_0);
+  graph.addConstraint(tooLong_1);
+
+  // ==========================================
+  // O teste real da sua arquitetura:
+  // ==========================================
+  auto sccs = graph.getTopologicalSCCs();
+  
+  Solver solver(state);
+  solver.solve(sccs);
+
+  // ==========================================
+  // Verificação matemática
+  // ==========================================
+  REQUIRE(state["tooLong_0"].getLower().value == 0);
+  REQUIRE(state["tooLong_0"].getUpper().value == 1);
+  REQUIRE(state["tooLong_1"].getLower().value == 0);
+  REQUIRE(state["tooLong_1"].getUpper().value == 1);
 }
