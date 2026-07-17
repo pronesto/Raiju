@@ -78,8 +78,7 @@ bool AddConstraint::eval(AbstractState& A) {
   // Otherwise treat every operand as a strided interval.
   auto getLower = [](const AnalyzedValue &v) -> Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
-      return {Bound::Type::Constant,
-              *v.getValues().begin()};
+      return Bound::constant(*v.getValues().begin());
     }
     return v.getLower();
   };
@@ -87,11 +86,9 @@ bool AddConstraint::eval(AbstractState& A) {
   auto getUpper = [](const AnalyzedValue &v) -> Bound {
     if (v.getKind() == AnalyzedValue::Kind::Set) {
       if (v.getValues().empty())
-        return {Bound::Type::Constant,
-              *v.getValues().begin()};
+        return Bound::constant(*v.getValues().begin());
               
-      return {Bound::Type::Constant,
-              *v.getValues().rbegin()};
+      return Bound::constant(*v.getValues().rbegin());
     }
     return v.getUpper();
   };
@@ -102,10 +99,9 @@ bool AddConstraint::eval(AbstractState& A) {
 
     if (a.type == Bound::Type::MinusInfinity ||
         b.type == Bound::Type::MinusInfinity)
-      return {Bound::Type::MinusInfinity, 0};
+      return Bound::minusInfinity();
 
-    return {Bound::Type::Constant,
-            a.value + b.value};
+    return Bound::constant(a.getConstant() + b.getConstant());
   };
 
   auto addUpper =
@@ -114,10 +110,9 @@ bool AddConstraint::eval(AbstractState& A) {
 
     if (a.type == Bound::Type::PlusInfinity ||
         b.type == Bound::Type::PlusInfinity)
-      return {Bound::Type::PlusInfinity, 0};
+      return Bound::plusInfinity();
 
-    return {Bound::Type::Constant,
-            a.value + b.value};
+    return Bound::constant(a.getConstant() + b.getConstant());
   };
 
   auto lower = addLower(getLower(lhs), getLower(rhs));

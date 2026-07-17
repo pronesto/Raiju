@@ -76,26 +76,26 @@ TEST_CASE("AbstractValue - Lattice Join Operations", "[lattice]") {
 
 TEST_CASE("AbstractValue - Bound Equality Operators", "[lattice][equality]") {
   SECTION("Constant bounds match based on exact value") {
-    Bound b1{Bound::Type::Constant, 42};
-    Bound b2{Bound::Type::Constant, 42};
-    Bound b3{Bound::Type::Constant, 99};
+    Bound b1 = Bound::constant(42);
+    Bound b2 = Bound::constant(42);
+    Bound b3 = Bound::constant(99);
 
     REQUIRE(b1 == b2);
     REQUIRE(b1 != b3);
   }
 
   SECTION("Infinities match by type regardless of junk value data") {
-    Bound inf1{Bound::Type::PlusInfinity, 0};
-    Bound inf2{Bound::Type::PlusInfinity, 1234}; // Different underlying value
-    Bound minf{Bound::Type::MinusInfinity, 0};
+    Bound inf1 = Bound::plusInfinity();
+    Bound inf2 = Bound::plusInfinity(); // Different underlying value
+    Bound minf = Bound::minusInfinity();
 
     REQUIRE(inf1 == inf2);
     REQUIRE(inf1 != minf);
   }
 
   SECTION("Different bound types are never equal") {
-    Bound c{Bound::Type::Constant, 0};
-    Bound inf{Bound::Type::PlusInfinity, 0};
+    Bound c = Bound::constant(0);
+    Bound inf = Bound::plusInfinity();
 
     REQUIRE(c != inf);
   }
@@ -187,9 +187,9 @@ TEST_CASE("AbstractValue - Bound Relational Operators",
           "[lattice][comparison]") {
 
   SECTION("Constant vs Constant comparisons") {
-    Bound b_low{Bound::Type::Constant, 10};
-    Bound b_high{Bound::Type::Constant, 20};
-    Bound b_same{Bound::Type::Constant, 10};
+    Bound b_low = Bound::constant(10);
+    Bound b_high = Bound::constant(20);
+    Bound b_same = Bound::constant(10);
 
     REQUIRE(b_low < b_high);
     REQUIRE(b_low <= b_high);
@@ -202,9 +202,9 @@ TEST_CASE("AbstractValue - Bound Relational Operators",
   }
 
   SECTION("Infinities dominate comparisons correctly") {
-    Bound minf{Bound::Type::MinusInfinity, -999};
-    Bound pinf{Bound::Type::PlusInfinity, 999};
-    Bound c{Bound::Type::Constant, 0};
+    Bound minf = Bound::minusInfinity();
+    Bound pinf = Bound::plusInfinity();
+    Bound c = Bound::constant(0);
 
     // Minus infinity checks
     REQUIRE(minf < c);
@@ -291,13 +291,13 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
 
     AbstractValue<3> infinite_top;
     infinite_top.setAsInterval(
-        {Bound::Type::Constant, 100},
-        {Bound::Type::PlusInfinity, 0});
+        Bound::constant(100),
+        Bound::plusInfinity());
 
     AbstractValue<3> infinite_bottom;
     infinite_bottom.setAsInterval(
-        {Bound::Type::MinusInfinity, 0},
-        {Bound::Type::Constant, -5});
+        Bound::minusInfinity(),
+        Bound::constant(-5));
 
     REQUIRE(interval < infinite_top);
     REQUIRE(infinite_bottom < interval);

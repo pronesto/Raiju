@@ -7,6 +7,8 @@
 #pragma once
 
 #include <iostream>
+#include <limits>
+#include <assert.h>
 
 /**
  * @struct Bound
@@ -14,6 +16,7 @@
  * infinities.
  */
 struct Bound {
+public:
   /**
    * @enum Type
    * @brief Defines the nature of the interval bound.
@@ -24,56 +27,64 @@ struct Bound {
     PlusInfinity   /**< Represents positive infinity (+\infty). */
   };
 
+private:
+  constexpr long long toKey() const {
+    if (type == Type::MinusInfinity) return std::numeric_limits<long long>::min();
+    if (type == Type::PlusInfinity) return std::numeric_limits<long long>::max();
+    return static_cast<long long>(value);
+  }
+
+  Bound(Type type, int value) : type(type), value(value) {}
+
+public:
   Type type; /**< The type of the bound. */
   int value; /**< The literal value if type is Type::Constant. */
+  
+  Bound() : type(Type::MinusInfinity), value(0) {}
+
+  static Bound minusInfinity() { return {Type::MinusInfinity, 0}; }
+  static Bound plusInfinity()  { return {Type::PlusInfinity, 0}; }
+  static Bound constant(int v) { return {Type::Constant, v}; }
+
+  constexpr bool isMinusInfinity() const { return type == Type::MinusInfinity; }
+  constexpr bool isPlusInfinity() const { return type == Type::PlusInfinity; }
+  constexpr bool isConstant() const { return type == Type::Constant; }
+  constexpr int getConstant() const { 
+    assert (this->isConstant() && "getConstant() requires a constant Bound");
+    return value;
+  }
 
   /**
    * @brief Equality operator for two Bounds.
    */
-  friend bool operator==(const Bound &lhs, const Bound &rhs) {
-    if (lhs.type != rhs.type)
-      return false;
-    if (lhs.type == Bound::Type::Constant) {
-      return lhs.value == rhs.value;
-    }
-    return true; // Both are either PlusInfinity or MinusInfinity
+  friend constexpr bool operator==(const Bound &lhs, const Bound &rhs) {
+    return lhs.type == rhs.type &&
+      (lhs.type != Type::Constant || lhs.value == rhs.value);
   }
 
   /**
    * @brief Inequality operator for two Bounds.
    */
-  friend bool operator!=(const Bound &lhs, const Bound &rhs) {
+  friend constexpr bool operator!=(const Bound &lhs, const Bound &rhs) {
     return !(lhs == rhs);
   }
 
   /**
    * @brief Less-than operator for two Bounds.
    */
-  friend bool operator<(const Bound &lhs, const Bound &rhs) {
-    if (lhs.type == rhs.type) {
-      if (lhs.type == Bound::Type::Constant) {
-        return lhs.value < rhs.value;
-      }
-      return false; // Both are -Infinity or both are +Infinity
-    }
-    // Handle distinct types
-    if (lhs.type == Bound::Type::MinusInfinity)
-      return true;
-    if (lhs.type == Bound::Type::PlusInfinity)
-      return false;
-    // lhs is Constant
-    return rhs.type == Bound::Type::PlusInfinity;
+  friend constexpr bool operator<(const Bound &lhs, const Bound &rhs) {
+    return lhs.toKey() < rhs.toKey();
   }
 
-  friend bool operator<=(const Bound &lhs, const Bound &rhs) {
+  friend constexpr bool operator<=(const Bound &lhs, const Bound &rhs) {
     return (lhs < rhs) || (lhs == rhs);
   }
 
-  friend bool operator>(const Bound &lhs, const Bound &rhs) {
+  friend constexpr bool operator>(const Bound &lhs, const Bound &rhs) {
     return rhs < lhs;
   }
 
-  friend bool operator>=(const Bound &lhs, const Bound &rhs) {
+  friend constexpr bool operator>=(const Bound &lhs, const Bound &rhs) {
     return !(lhs < rhs);
   }
 

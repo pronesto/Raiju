@@ -381,8 +381,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      Bound{Bound::Type::Constant, 0},
-      Bound{Bound::Type::Constant, 30});
+      Bound::constant(0),
+      Bound::constant(30));
 
   dummy["z"] = z;
 
@@ -390,8 +390,8 @@ TEST_CASE("Resolve future lower bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      Bound{Bound::Type::Constant, 13},
-      Bound{Bound::Type::Constant, 30});
+      Bound::constant(13),
+      Bound::constant(30));
 
   REQUIRE(dummy["y"] == expected);
 }
@@ -431,8 +431,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue z;
   z.setAsInterval(
-      Bound{Bound::Type::Constant, 0},
-      Bound{Bound::Type::Constant, 30});
+      Bound::constant(0),
+      Bound::constant(30));
 
   dummy["z"] = z;
 
@@ -440,8 +440,8 @@ TEST_CASE("Resolve future upper bound",
 
   AnalyzedValue expected;
   expected.setAsInterval(
-      Bound{Bound::Type::Constant, 0},
-      Bound{Bound::Type::Constant, 18});
+      Bound::constant(0),
+      Bound::constant(18));
 
   REQUIRE(dummy["y"] == expected);
 }
