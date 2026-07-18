@@ -321,75 +321,53 @@ bool MultiplyConstraint::eval(AbstractState &A)
       return (v.getLower().type != Bound::Type::Constant || v.getUpper().type != Bound::Type::Constant);
     };
 
-    auto solveInfinite = [](const Bound &x1, Bound &y1, Bound &x2, Bound &y2) -> std::pair<Bound, Bound> {
+    auto solveInfinite = [](const Bound &x1, const Bound &y1, const Bound &x2, const Bound &y2) -> std::pair<Bound, Bound> {
+      // 2. Case: [-inf, +inf] * [anything other than zero] is [-inf, +inf]
+      if (x1.isMinusInfinity() && y1.isPlusInfinity()) {
+          return {Bound::minusInfinity(), Bound::plusInfinity()};
+      }
+
+      // 3. Normalized flags for readability
+      bool x1_inf = x1.isMinusInfinity();
+      bool y1_inf = y1.isPlusInfinity();
+      bool x2_pos = x2.value >= 0;
+      bool y2_pos = y2.value >= 0;
+
+      auto inf = []() -> std::pair<Bound, Bound> { 
+        return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity()); 
+      };
+
+      auto minusInfBound = [](const int product) -> std::pair<Bound, Bound> { 
+        return std::make_pair(Bound::minusInfinity(), Bound::constant(product)); 
+      };
       
-      if((x1.isConstant() && x1.value) == 0 && (y1.isConstant() && y1.value == 0)) // 0,0] * [x2,y2] or [0,0] * [-inf, +inf]
-      {
-        // [0,0]
-        return {Bound::constant(0), Bound::constant(0)};
-      }else if(x1.isMinusInfinity() && y1.isPlusInfinity()) // [-inf, +inf] * [x2,y2]
-      {
-        // [-inf, +inf]
-        return {Bound::minusInfinity(), Bound::plusInfinity()};
-      }else if(x1.isMinusInfinity() && y1.value >= 0) // [-inf, y1] * ...
-      {
-        if(x2.value >= 0){ // [-inf, y1] * [x2,y2] or [-inf, y1] * [0,y2]
-           // [-inf, y1*y2]
-           return {Bound::minusInfinity(), Bound::constant(y1.value*y2.value)};
-        }else{
-          if(y1.value > 0){
-            // [-inf, +inf]
-            return {Bound::minusInfinity(), Bound::plusInfinity()};
-          }else{
-            // [y1*-x2, +inf]
-            return {Bound::constant(y1.value*x2.value), Bound::plusInfinity()};
+      auto plusInfBound= [](const int product) -> std::pair<Bound, Bound> {
+        return std::make_pair(Bound::constant(product), Bound::plusInfinity()); 
+      };
+
+      // Logic based on which side the infinity is on and the sign of the multiplier [x2, y2]
+      if (x1_inf) {
+          if (y1.value > 0) { // [-inf, +]
+              if (x2.value >= 0) return minusInfBound(y1.value * y2.value);
+              if (y2.value <= 0) return plusInfBound(y1.value * x2.value);
+              return inf();
+          } else { // [-inf, -]
+              if (x2.value >= 0) return minusInfBound(y1.value * x2.value);
+              if (y2.value <= 0) return plusInfBound(y1.value * y2.value);
+              return inf();
           }
-        }
-      }else if(x1.isMinusInfinity() && y1.value < 0) // [-inf, -y1] * ...
-      {
-        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
-           // [-inf, −y1​*x2​]
-           return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
-        }else{
-          if(y2.value > 0)
-          {
-            // [-inf, +inf]
-            return {Bound::minusInfinity(), Bound::plusInfinity()};
-          }else{
-            // [y1*y2, +inf]
-            return {Bound::constant(y1.value*x2.value), Bound::plusInfinity()};
+      } 
+      
+      if (y1_inf) {
+          if (x1.value > 0) { // [+, +inf]
+              if (x2.value >= 0) return plusInfBound(x1.value * x2.value);
+              if (y2.value <= 0) return minusInfBound(x1.value * y2.value);
+              return inf();
+          } else { // [-, +inf]
+              if (x2.value >= 0) return plusInfBound(x1.value * y2.value);
+              if (y2.value <= 0) return minusInfBound(x1.value * x2.value);
+              return inf();
           }
-        }
-      }else if(y1.isPlusInfinity() && x1.value >= 0)
-      {
-        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
-           // [x1*x2, +inf]
-           return {Bound::constant(y1.value*x2.value),  Bound::plusInfinity()};
-        }else{
-          if(y2.value > 0)
-          {
-            // [-inf, +inf]
-            return {Bound::minusInfinity(), Bound::plusInfinity()};
-          }else{
-            // [-inf, -x1*y2]
-            return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
-          }
-        }
-      }else if(y1.isPlusInfinity() && x1.value < 0)
-      {
-        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
-           // [-x1*y2, +inf]
-           return {Bound::constant(y1.value*x2.value),  Bound::plusInfinity()};
-        }else{
-          if(y2.value > 0)
-          {
-            // [-inf, +inf]
-            return {Bound::minusInfinity(), Bound::plusInfinity()};
-          }else{
-            // [-inf, x1*x2]
-            return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
-          }
-        }
       }
     };
 
