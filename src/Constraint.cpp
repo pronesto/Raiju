@@ -312,64 +312,102 @@ bool MultiplyConstraint::eval(AbstractState &A)
       return Bound::constant(a.getConstant() + b.getConstant());
     };
 
-    auto multUpper =
-        [](const Bound &a,
-          const Bound &b) -> Bound {
-
-      if (a.type == Bound::Type::PlusInfinity ||
-          b.type == Bound::Type::PlusInfinity)
-        return Bound::plusInfinity();
-
-      return Bound::constant(a.getConstant() + b.getConstant());
-    };
-
     Bound l1 = getLower(lhs);
     Bound l2 = getLower(rhs);
     Bound u1 = getUpper(lhs);
     Bound u2 = getUpper(rhs);
 
-    // Possible multiplications
+    auto hasInfiniteBound = [](const AnalyzedValue& v) -> bool {
+      return (v.getLower().type != Bound::Type::Constant || v.getUpper().type != Bound::Type::Constant);
+    };
 
-    // [0,0] * [x2,y2] -> [0,0]
-    // [0,0] * [-inf, +inf] -> [0,0]
-    // [-inf, +inf] * [x2,y2] -> [-inf, +inf]
+    auto solveInfinite = [](const Bound &x1, Bound &y1, Bound &x2, Bound &y2) -> std::pair<Bound, Bound> {
+      
+      if((x1.isConstant() && x1.value) == 0 && (y1.isConstant() && y1.value == 0)) // 0,0] * [x2,y2] or [0,0] * [-inf, +inf]
+      {
+        // [0,0]
+        return {Bound::constant(0), Bound::constant(0)};
+      }else if(x1.isMinusInfinity() && y1.isPlusInfinity()) // [-inf, +inf] * [x2,y2]
+      {
+        // [-inf, +inf]
+        return {Bound::minusInfinity(), Bound::plusInfinity()};
+      }else if(x1.isMinusInfinity() && y1.value >= 0) // [-inf, y1] * ...
+      {
+        if(x2.value >= 0){ // [-inf, y1] * [x2,y2] or [-inf, y1] * [0,y2]
+           // [-inf, y1*y2]
+           return {Bound::minusInfinity(), Bound::constant(y1.value*y2.value)};
+        }else{
+          if(y1.value > 0){
+            // [-inf, +inf]
+            return {Bound::minusInfinity(), Bound::plusInfinity()};
+          }else{
+            // [y1*-x2, +inf]
+            return {Bound::constant(y1.value*x2.value), Bound::plusInfinity()};
+          }
+        }
+      }else if(x1.isMinusInfinity() && y1.value < 0) // [-inf, -y1] * ...
+      {
+        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
+           // [-inf, −y1​*x2​]
+           return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
+        }else{
+          if(y2.value > 0)
+          {
+            // [-inf, +inf]
+            return {Bound::minusInfinity(), Bound::plusInfinity()};
+          }else{
+            // [y1*y2, +inf]
+            return {Bound::constant(y1.value*x2.value), Bound::plusInfinity()};
+          }
+        }
+      }else if(y1.isPlusInfinity() && x1.value >= 0)
+      {
+        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
+           // [x1*x2, +inf]
+           return {Bound::constant(y1.value*x2.value),  Bound::plusInfinity()};
+        }else{
+          if(y2.value > 0)
+          {
+            // [-inf, +inf]
+            return {Bound::minusInfinity(), Bound::plusInfinity()};
+          }else{
+            // [-inf, -x1*y2]
+            return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
+          }
+        }
+      }else if(y1.isPlusInfinity() && x1.value < 0)
+      {
+        if(x2.value >= 0){ // [-inf, -y1] * [x2,y2] or [-inf, -y1] * [0,y2]
+           // [-x1*y2, +inf]
+           return {Bound::constant(y1.value*x2.value),  Bound::plusInfinity()};
+        }else{
+          if(y2.value > 0)
+          {
+            // [-inf, +inf]
+            return {Bound::minusInfinity(), Bound::plusInfinity()};
+          }else{
+            // [-inf, x1*x2]
+            return {Bound::minusInfinity(), Bound::constant(y1.value*x2.value)};
+          }
+        }
+      }
+    };
 
-    // [-inf, y1] * [x2,y2] -> [-inf, y1*y2]
-    // [-inf, y1] * [0,y2] -> [-inf, y1*y2]
-    // [-inf, y1] * [-x2,y2] -> [-inf, +inf]
-    // [-inf, y1] * [-x2,0] -> [y1*-x2, +inf]
-    // [-inf, y1] * [-x2,-y2] -> [y1*-x2, +inf]
+    if (hasInfiniteBound(lhs) || hasInfiniteBound(rhs)) {
+      auto [newLow, newUp] = solveInfinite(l1, l2, u1, u2);
+      result.setAsInterval(newLow, newUp, 1); // FIX ME: Interval Stride
+    } else {
+      int p1 = l1.value * l2.value;
+      int p2 = l1.value * u2.value;
+      int p3 = u1.value * l2.value;
+      int p4 = u1.value * u2.value;
 
-    // [-inf, -y1] * [x2,y2] -> 
-    // [-inf, -y1] * [0,y2] -> 
-    // [-inf, -y1] * [-x2,y2] -> [-inf, +inf]
-    // [-inf, -y1] * [-x2,0] -> 
-    // [-inf, -y1] * [-x2,-y2] -> 
+      int min = std::min({p1, p2, p3, p4});
+      int max = std::max({p1, p2, p3, p4});
 
-    // [x1, +inf] * [x2,y2] -> 
-    // [x1, +inf] * [0,y2] -> 
-    // [x1, +inf] * [-x2,y2] -> [-inf, +inf]
-    // [x1, +inf] * [-x2,0] -> 
-    // [x1, +inf] * [-x2,-y2] -> 
-
-    // [-x1, +inf] * [x2,y2] -> 
-    // [-x1, +inf] * [0,y2] -> 
-    // [-x1, +inf] * [-x2,y2] -> [-inf, +inf]
-    // [-x1, +inf] * [-x2,0] -> 
-    // [-x1, +inf] * [-x2,-y2] -> 
-
-
-    int p1 = l1.value * l2.value;
-    int p2 = l1.value * u2.value;
-    int p3 = u1.value * l2.value;
-    int p4 = u1.value * u2.value;
-
-    int min = std::min({p1, p2, p3, p4});
-    int max = std::max({p1, p2, p3, p4});
-
-    result.setAsInterval(Bound::constant(min),
-                         Bound::constant(max), 1); // FIXME: Interval stride
-  }
+      result.setAsInterval(Bound::constant(min),Bound::constant(max), 1); // FIXME: Interval stride
+    }
+}
 
   A[this->def] = result;
   return old != result;
