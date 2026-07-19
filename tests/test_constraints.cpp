@@ -648,3 +648,374 @@ TEST_CASE("Constraints - LinearConstraint Identity", "[constraints][linear]") {
     REQUIRE(state["v0"].getValues() == std::set<int>{42});
   }
 }
+
+TEST_CASE("Constraints - MultiplyConstraint Infinite Bounds", "[constraints][mul]") {
+  AbstractState state;
+
+  SECTION("Multiplication: [0, 0] * [2, 3]") {
+    // [0,0] * [2,3] -> [0,0]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::constant(0), Bound::constant(0), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(2), Bound::constant(3), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().value == 0);
+    REQUIRE(result.getUpper().value == 0);
+  }
+
+  SECTION("Multiplication: [0, 0] * [-inf, +inf]") {
+    // [0,0] * [-inf, +inf] ->   [0,0]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::constant(0), Bound::constant(0), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().value == 0);
+    REQUIRE(result.getUpper().value == 0);
+  }
+
+  SECTION("Multiplication: [-inf, +inf] * [2, 4]") {
+    // [-inf, +inf] * [x2,y2] -> [-inf, +inf]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(2), Bound::constant(4), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().isPlusInfinity());
+  }
+
+  SECTION("Multiplication: [-inf, 2] * [1, 30]") {
+    // [-inf, y1] * [x2,y2] ->   [-inf, y1*y2]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(1), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().value == 60);
+  }
+
+  SECTION("Multiplication: [-inf, 2] * [0, 30]") {
+    // [-inf, y1] * [0,y2] ->   [-inf, y1*y2]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(0), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().value == 60);
+  }
+
+  SECTION("Multiplication: [-inf, -2] * [0, 30]") {
+    // [-inf, -y1] * [0,y2] ->   [-inf, y1*y2]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(-2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(0), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().value == 0);
+  }
+
+  SECTION("Multiplication: [-inf, 0] * [0, 30]") {
+    // [-inf, 0] * [0,y2] ->   [-inf, y1*y2]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(0), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(0), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().value == 0);
+  }
+
+  SECTION("Multiplication: [-inf, 2] * [-1, 30]") {
+    // [-inf, y1] * [-x2,y2] ->  [-inf, +inf]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(-1), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().isPlusInfinity());
+  }
+
+  SECTION("Multiplication: [-inf, 2] * [-1, 0]") {
+    // [-inf, y1] * [-x2,0] ->   [y1*-x2, +inf]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(-1), Bound::constant(0), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().value == -2);
+    REQUIRE(result.getUpper().isPlusInfinity());
+  }
+
+  SECTION("Multiplication: [-inf, -2] * [-1, 0]") {
+    // [-inf, y1] * [-x2,0] ->   [y1*-x2, +inf]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(-2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(-1), Bound::constant(0), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().value == 0);
+    REQUIRE(result.getUpper().isPlusInfinity());
+  }
+
+  SECTION("Multiplication: [-inf, 2] * [-1, 0]") {
+    // [-inf, y1] * [-x2,0] ->   [y1*-x2, +inf]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(0), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(-1), Bound::constant(0), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().value == 0);
+    REQUIRE(result.getUpper().isPlusInfinity());
+  }
+  
+
+  SECTION("Multiplication: [-inf, 2] * [1, 30]") {
+    // [-inf, y1] * [x2,y2] ->   [-inf, y1*y2]
+    AnalyzedValue a;
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    state["a"] = a;
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(1), Bound::constant(30), 1);
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b");
+    multiply.eval(state);
+
+    const auto &result = state["c"];
+    REQUIRE(result.getLower().isMinusInfinity());
+    REQUIRE(result.getUpper().value == 60);
+  }
+
+  SECTION("[-inf, y1] * [-x2, -y2] -> [y1 * -x2, +inf]") {
+    // [-inf, 2] * [-10, -5] -> [2 * -10, +inf] -> [-20, +inf]
+    AnalyzedValue a; a.setAsInterval(Bound::minusInfinity(), Bound::constant(2), 1);
+    AnalyzedValue b; b.setAsInterval(Bound::constant(-10), Bound::constant(-5), 1);
+    state["a"] = a; state["b"] = b;
+    MultiplyConstraint m("c", "a", "b"); m.eval(state);
+    REQUIRE(state["c"].getLower().value == -20);
+    REQUIRE(state["c"].getUpper().isPlusInfinity());
+  }
+
+  SECTION("[-inf, -y1] * [x2, y2] -> [-inf, -y1 * x2]") {
+    // [-inf, -2] * [3, 5] -> [-inf, -6]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(-2), 1);
+    
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(3), Bound::constant(5), 1);
+    
+    state["a"] = a; 
+    state["b"] = b;
+    
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().value == -6);
+  }
+
+  SECTION("[-inf, -y1] * [0, y2] -> [-inf, 0]") {
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(-2), 1);
+
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(0), Bound::constant(5), 1);
+    
+    state["a"] = a; 
+    state["b"] = b;
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().value == 0);
+  }
+
+  SECTION("[x1, +inf] * [x2, y2] -> [x1 * x2, +inf]") {
+    // [2, +inf] * [3, 4] -> [6, +inf]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(2), Bound::plusInfinity(), 1);
+
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(3), Bound::constant(4), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+    
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+
+    REQUIRE(state["c"].getLower().value == 6);
+    REQUIRE(state["c"].getUpper().isPlusInfinity());
+  }
+
+  SECTION("[x1, +inf] * [0, y2] -> [0, +inf]") {
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(2), Bound::plusInfinity(), 1);
+
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(0), Bound::constant(4), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().value == 0);
+    REQUIRE(state["c"].getUpper().isPlusInfinity());
+  }
+
+  SECTION("[x1, +inf] * [-x2, 0] -> [-inf, 0]") {
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(2), Bound::plusInfinity(), 1);
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(-5), Bound::constant(0), 1);
+    
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().value == 0);
+  }
+
+  SECTION("[-x1, +inf] * [-x2, -y2] -> [-inf, x1 * x2]") {
+    // [-2, +inf] * [-5, -3] -> [-inf, 10]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(-2), Bound::plusInfinity(), 1);
+
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(-5), Bound::constant(-3), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().value == 10);
+  }
+
+  // FAILED
+  SECTION("[-x1, +inf] * [0, y2] -> [-inf, x1 * y2]") {
+    // [-2, +inf] * [0, 3] -> [-inf, -6]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(-2), Bound::plusInfinity(), 1);
+
+    AnalyzedValue b; 
+    b.setAsInterval(Bound::constant(0), Bound::constant(3), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().value == -6);
+    REQUIRE(state["c"].getUpper().isPlusInfinity());
+  }
+
+  SECTION("[-x1, +inf] * [-x2, 0] -> [-inf, x1 * x2]") {
+    // [-2, +inf] * [-5, 0] -> [-inf, 10]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::constant(-2), Bound::plusInfinity(), 1);
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(-5), Bound::constant(0), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().value == 10);
+  }
+}
