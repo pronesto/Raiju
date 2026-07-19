@@ -982,7 +982,6 @@ TEST_CASE("Constraints - MultiplyConstraint Infinite Bounds", "[constraints][mul
     REQUIRE(state["c"].getUpper().value == 10);
   }
 
-  // FAILED
   SECTION("[-x1, +inf] * [0, y2] -> [-inf, x1 * y2]") {
     // [-2, +inf] * [0, 3] -> [-inf, -6]
     AnalyzedValue a; 
