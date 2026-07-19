@@ -324,7 +324,7 @@ bool MultiplyConstraint::eval(AbstractState &A)
     auto solveInfinite = [](const Bound &x1, const Bound &y1, const Bound &x2, const Bound &y2) -> std::pair<Bound, Bound> {
       // 2. Case: [-inf, +inf] * [anything other than zero] is [-inf, +inf]
       if (x1.isMinusInfinity() && y1.isPlusInfinity()) {
-          return {Bound::minusInfinity(), Bound::plusInfinity()};
+          return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity());
       }
 
       // 3. Normalized flags for readability
@@ -372,7 +372,7 @@ bool MultiplyConstraint::eval(AbstractState &A)
     };
 
     if (hasInfiniteBound(lhs) || hasInfiniteBound(rhs)) {
-      auto [newLow, newUp] = solveInfinite(l1, l2, u1, u2);
+      auto [newLow, newUp] = solveInfinite(l1, u1, l2, u2);
       result.setAsInterval(newLow, newUp, 1); // FIX ME: Interval Stride
     } else {
       int p1 = l1.value * l2.value;
