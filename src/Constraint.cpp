@@ -97,8 +97,8 @@ bool AddConstraint::eval(AbstractState& A) {
       [](const Bound &a,
          const Bound &b) -> Bound {
 
-    if (a.type == Bound::Type::MinusInfinity ||
-        b.type == Bound::Type::MinusInfinity)
+    if (a.isMinusInfinity() ||
+        b.isMinusInfinity())
       return Bound::minusInfinity();
 
     return Bound::constant(a.getConstant() + b.getConstant());
@@ -108,8 +108,8 @@ bool AddConstraint::eval(AbstractState& A) {
       [](const Bound &a,
          const Bound &b) -> Bound {
 
-    if (a.type == Bound::Type::PlusInfinity ||
-        b.type == Bound::Type::PlusInfinity)
+    if (a.isPlusInfinity() ||
+        b.isPlusInfinity())
       return Bound::plusInfinity();
 
     return Bound::constant(a.getConstant() + b.getConstant());
@@ -154,11 +154,10 @@ IntersectionConstraint::resolveBound(const IntersectionBound &b,
   Bound result;
 
   if (isLower)
-    result.type = Bound::Type::MinusInfinity;
+    result = Bound::minusInfinity();
   else
-    result.type = Bound::Type::PlusInfinity;
+    result = Bound::plusInfinity();
 
-  result.value = 0;
   return result;
 }
 
@@ -178,8 +177,8 @@ IntersectionConstraint::resolveFutures(const AbstractState &state) const {
       isLower ? it->second.getLower()
       : it->second.getUpper();
 
-    if (result.type == Bound::Type::Constant)
-      result.value += future.offset;
+    if (result.isConstant())
+      result.setConstant(result.getConstant() + future.offset);
 
     return result;
   };
@@ -212,10 +211,10 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     std::vector<int> vals;
     for (int v : src.getValues()) {
       bool keep = true;
-      if (low.type == Bound::Type::Constant)
-        keep &= (v >= low.value);
-      if (up.type == Bound::Type::Constant)
-        keep &= (v <= up.value);
+      if (low.isConstant())
+        keep &= (v >= low.getConstant());
+      if (up.isConstant())
+        keep &= (v <= up.getConstant());
       if (keep)
         vals.emplace_back(v);
     }
@@ -230,25 +229,25 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     auto upper = src.getUpper();
 
     // max(lower, low)
-    if (low.type == Bound::Type::Constant) {
-      if (lower.type == Bound::Type::MinusInfinity)
+    if (low.isConstant()) {
+      if (lower.isMinusInfinity())
         lower = low;
-      else if (lower.type == Bound::Type::Constant)
-        lower.value = std::max(lower.value, low.value);
+      else if (lower.isConstant())
+        lower.setConstant(std::max(lower.getConstant(), low.getConstant()));
     }
 
     // min(upper, up)
-    if (up.type == Bound::Type::Constant) {
-      if (upper.type == Bound::Type::PlusInfinity)
+    if (up.isConstant()) {
+      if (upper.isPlusInfinity())
         upper = up;
-      else if (upper.type == Bound::Type::Constant)
-        upper.value = std::min(upper.value, up.value);
+      else if (upper.isConstant())
+        upper.setConstant(std::min(upper.getConstant(), up.getConstant()));
     }
 
     // Empty interval?
-    if (lower.type == Bound::Type::Constant &&
-        upper.type == Bound::Type::Constant &&
-        lower.value > upper.value) {
+    if (lower.isConstant() &&
+        upper.isConstant() &&
+        lower.getConstant() > upper.getConstant()) {
       // Leave result as bottom.
     } else {
       A[def].setAsInterval(lower, upper, src.getStride());
@@ -301,37 +300,28 @@ bool MultiplyConstraint::eval(AbstractState &A)
       return v.getUpper();
     };
 
-    auto multLower =
-        [](const Bound &a,
-          const Bound &b) -> Bound {
-
-      if (a.type == Bound::Type::MinusInfinity ||
-          b.type == Bound::Type::MinusInfinity)
-        return Bound::minusInfinity();
-
-      return Bound::constant(a.getConstant() + b.getConstant());
-    };
-
     Bound l1 = getLower(lhs);
     Bound l2 = getLower(rhs);
     Bound u1 = getUpper(lhs);
     Bound u2 = getUpper(rhs);
 
     auto hasInfiniteBound = [](const AnalyzedValue& v) -> bool {
-      return (v.getLower().type != Bound::Type::Constant || v.getUpper().type != Bound::Type::Constant);
+      return (!v.getLower().isConstant() || !v.getUpper().isConstant());
     };
 
     auto solveInfinite = [](const Bound &x1, const Bound &y1, const Bound &x2, const Bound &y2) -> std::pair<Bound, Bound> {
       // 2. Case: [-inf, +inf] * [anything other than zero] is [-inf, +inf]
       if (x1.isMinusInfinity() && y1.isPlusInfinity()) {
-          return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity());
+        if (x2.isConstant() && x2.getConstant() == 0 && y2.isConstant() && y2.getConstant() == 0)
+          return std::make_pair(Bound::constant(0), Bound::constant(0));
+        return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity());
       }
 
       // 3. Normalized flags for readability
       bool x1_inf = x1.isMinusInfinity();
       bool y1_inf = y1.isPlusInfinity();
-      bool x2_pos = x2.value >= 0;
-      bool y2_pos = y2.value >= 0;
+      bool x2_pos = x2.isConstant() && x2.getConstant() >= 0;
+      bool y2_neg = y2.isConstant() && y2.getConstant() <= 0;
 
       auto inf = []() -> std::pair<Bound, Bound> { 
         return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity()); 
@@ -347,38 +337,41 @@ bool MultiplyConstraint::eval(AbstractState &A)
 
       // Logic based on which side the infinity is on and the sign of the multiplier [x2, y2]
       if (x1_inf) {
-          if (y1.value > 0) { // [-inf, +]
-              if (x2.value >= 0) return minusInfBound(y1.value * y2.value);
-              if (y2.value <= 0) return plusInfBound(y1.value * x2.value);
+          if (y1.getConstant() > 0) { // [-inf, +]
+              if (x2_pos) return minusInfBound(y1.getConstant() * y2.getConstant());
+              if (y2_neg) return plusInfBound(y1.getConstant() * x2.getConstant());
               return inf();
           } else { // [-inf, -]
-              if (x2.value >= 0) return minusInfBound(y1.value * x2.value);
-              if (y2.value <= 0) return plusInfBound(y1.value * y2.value);
+              if (x2_pos) return minusInfBound(y1.getConstant() * x2.getConstant());
+              if (y2_neg) return plusInfBound(y1.getConstant() * y2.getConstant());
               return inf();
           }
       } 
       
       if (y1_inf) {
-          if (x1.value > 0) { // [+, +inf]
-              if (x2.value >= 0) return plusInfBound(x1.value * x2.value);
-              if (y2.value <= 0) return minusInfBound(x1.value * y2.value);
+          if (x1.getConstant() > 0) { // [+, +inf]
+              if (x2_pos) return plusInfBound(x1.getConstant() * x2.getConstant());
+              if (y2_neg) return minusInfBound(x1.getConstant() * y2.getConstant());
               return inf();
           } else { // [-, +inf]
-              if (x2.value >= 0) return plusInfBound(x1.value * y2.value);
-              if (y2.value <= 0) return minusInfBound(x1.value * x2.value);
+              if (x2_pos) return plusInfBound(x1.getConstant() * y2.getConstant());
+              if (y2_neg) return minusInfBound(x1.getConstant() * x2.getConstant());
               return inf();
           }
       }
     };
 
-    if (hasInfiniteBound(lhs) || hasInfiniteBound(rhs)) {
+    if (hasInfiniteBound(lhs)) {
       auto [newLow, newUp] = solveInfinite(l1, u1, l2, u2);
-      result.setAsInterval(newLow, newUp, 1); // FIX ME: Interval Stride
+      result.setAsInterval(newLow, newUp, 1);
+    } else if (hasInfiniteBound(rhs)) {
+      auto [newLow, newUp] = solveInfinite(l2, u2, l1, u1);
+      result.setAsInterval(newLow, newUp, 1);
     } else {
-      int p1 = l1.value * l2.value;
-      int p2 = l1.value * u2.value;
-      int p3 = u1.value * l2.value;
-      int p4 = u1.value * u2.value;
+      int p1 = l1.getConstant() * l2.getConstant();
+      int p2 = l1.getConstant() * u2.getConstant();
+      int p3 = u1.getConstant() * l2.getConstant();
+      int p4 = u1.getConstant() * u2.getConstant();
 
       int min = std::min({p1, p2, p3, p4});
       int max = std::max({p1, p2, p3, p4});
@@ -406,13 +399,36 @@ bool LinearConstraint::eval(AbstractState &A)
     }
     result.addConstant(consts);
   }else{
-    int k1 = (this->a*src.getLower().value + this->b);
-    int ku = (this->a*src.getUpper().value + this->b);
-
-    int min = std::min(k1,ku);
-    int max = std::max(k1,ku);
-
-    result.setAsInterval(Bound::constant(min), Bound::constant(max), src.getStride());
+    Bound srcLower = src.getLower();
+    Bound srcUpper = src.getUpper();
+    
+    Bound lower, upper;
+    
+    if (this->a == 0)
+        result.setAsInterval(Bound::constant(b), Bound::constant(b), src.getStride());
+    else if (srcLower.isConstant() && srcUpper.isConstant()) {
+      int k1 = (this->a * srcLower.getConstant() + this->b);
+      int ku = (this->a * srcUpper.getConstant() + this->b);
+      int min = std::min(k1,ku);
+      int max = std::max(k1,ku);
+      result.setAsInterval(Bound::constant(min), Bound::constant(max), src.getStride());
+    } else {
+      if (srcLower.isMinusInfinity() && srcUpper.isPlusInfinity()) {
+        result.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
+      } else if (srcLower.isMinusInfinity()) {
+        int k = (this->a * srcUpper.getConstant() + this->b);
+        if (this->a > 0)
+          result.setAsInterval(Bound::minusInfinity(), Bound::constant(k), 1);
+        else
+          result.setAsInterval(Bound::constant(k), Bound::plusInfinity(), 1);
+      } else {
+        int k = (this->a * srcLower.getConstant() + this->b);
+        if (this->a > 0)
+          result.setAsInterval(Bound::constant(k), Bound::plusInfinity(), 1);
+        else
+          result.setAsInterval(Bound::minusInfinity(), Bound::constant(k), 1);
+      }
+    }
   }
 
   A[this->def] = result;

@@ -76,8 +76,8 @@ public:
       Bound hi = oldY.getUpper();
 
       // 1. Guard 1: I[Y] is -Infinity, and e(Y) has recovered to a finite bound
-      if (oldY.getLower().type == Type::MinusInfinity &&
-          eY.getLower().type  != Type::MinusInfinity) {
+      if (oldY.getLower().isMinusInfinity() &&
+          !eY.getLower().isMinusInfinity()) {
         lo = eY.getLower();
       }
       // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower
@@ -87,8 +87,8 @@ public:
       }
 
       // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
-      if (oldY.getUpper().type == Type::PlusInfinity &&
-          eY.getUpper().type  != Type::PlusInfinity) {
+      if (oldY.getUpper().isPlusInfinity() &&
+          !eY.getUpper().isPlusInfinity()) {
         hi = eY.getUpper();
       }
       // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper
