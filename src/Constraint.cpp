@@ -97,8 +97,8 @@ bool AddConstraint::eval(AbstractState& A) {
       [](const Bound &a,
          const Bound &b) -> Bound {
 
-    if (a.type == Bound::Type::MinusInfinity ||
-        b.type == Bound::Type::MinusInfinity)
+    if (a.isMinusInfinity() ||
+        b.isMinusInfinity())
       return Bound::minusInfinity();
 
     return Bound::constant(a.getConstant() + b.getConstant());
@@ -108,8 +108,8 @@ bool AddConstraint::eval(AbstractState& A) {
       [](const Bound &a,
          const Bound &b) -> Bound {
 
-    if (a.type == Bound::Type::PlusInfinity ||
-        b.type == Bound::Type::PlusInfinity)
+    if (a.isPlusInfinity() ||
+        b.isPlusInfinity())
       return Bound::plusInfinity();
 
     return Bound::constant(a.getConstant() + b.getConstant());
@@ -154,11 +154,10 @@ IntersectionConstraint::resolveBound(const IntersectionBound &b,
   Bound result;
 
   if (isLower)
-    result.type = Bound::Type::MinusInfinity;
+    result = Bound::minusInfinity();
   else
-    result.type = Bound::Type::PlusInfinity;
+    result = Bound::plusInfinity();
 
-  result.value = 0;
   return result;
 }
 
@@ -178,8 +177,8 @@ IntersectionConstraint::resolveFutures(const AbstractState &state) const {
       isLower ? it->second.getLower()
       : it->second.getUpper();
 
-    if (result.type == Bound::Type::Constant)
-      result.value += future.offset;
+    if (result.isConstant())
+      result.setConstant(result.getConstant() + future.offset);
 
     return result;
   };
@@ -212,10 +211,10 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     std::vector<int> vals;
     for (int v : src.getValues()) {
       bool keep = true;
-      if (low.type == Bound::Type::Constant)
-        keep &= (v >= low.value);
-      if (up.type == Bound::Type::Constant)
-        keep &= (v <= up.value);
+      if (low.isConstant())
+        keep &= (v >= low.getConstant());
+      if (up.isConstant())
+        keep &= (v <= up.getConstant());
       if (keep)
         vals.emplace_back(v);
     }
@@ -230,25 +229,25 @@ bool IntersectionConstraint::eval(AbstractState &A) {
     auto upper = src.getUpper();
 
     // max(lower, low)
-    if (low.type == Bound::Type::Constant) {
-      if (lower.type == Bound::Type::MinusInfinity)
+    if (low.isConstant()) {
+      if (lower.isMinusInfinity())
         lower = low;
-      else if (lower.type == Bound::Type::Constant)
-        lower.value = std::max(lower.value, low.value);
+      else if (lower.isConstant())
+        lower.setConstant(std::max(lower.getConstant(), low.getConstant()));
     }
 
     // min(upper, up)
-    if (up.type == Bound::Type::Constant) {
-      if (upper.type == Bound::Type::PlusInfinity)
+    if (up.isConstant()) {
+      if (upper.isPlusInfinity())
         upper = up;
-      else if (upper.type == Bound::Type::Constant)
-        upper.value = std::min(upper.value, up.value);
+      else if (upper.isConstant())
+        upper.setConstant(std::min(upper.getConstant(), up.getConstant()));
     }
 
     // Empty interval?
-    if (lower.type == Bound::Type::Constant &&
-        upper.type == Bound::Type::Constant &&
-        lower.value > upper.value) {
+    if (lower.isConstant() &&
+        upper.isConstant() &&
+        lower.getConstant() > upper.getConstant()) {
       // Leave result as bottom.
     } else {
       A[def].setAsInterval(lower, upper, src.getStride());
@@ -256,4 +255,153 @@ bool IntersectionConstraint::eval(AbstractState &A) {
   }
 
     return oldValue != A[def];
+}
+
+bool MultiplyConstraint::eval(AbstractState &A)
+{
+  AnalyzedValue old = A[this->def];
+
+  AnalyzedValue lhs = A[this->op1];
+  AnalyzedValue rhs = A[this->op2];
+
+  AnalyzedValue result;
+
+  if(lhs.getKind() == AnalyzedValue::Kind::Set && rhs.getKind() == AnalyzedValue::Kind::Set)
+  {
+    if (lhs.getValues().empty() || rhs.getValues().empty()) {
+      A[def] = result;
+      return old != result;
+    }
+
+    std::vector<int> consts;
+    for (int l : lhs.getValues()) {
+        for (int r : rhs.getValues()) {
+            consts.emplace_back(l * r);
+        }
+    }
+    result.addConstant(consts);
+  } else {
+
+    // Otherwise treat every operand as a strided interval.
+    auto getLower = [](const AnalyzedValue &v) -> Bound {
+      if (v.getKind() == AnalyzedValue::Kind::Set) {
+        return Bound::constant(*v.getValues().begin());
+      }
+      return v.getLower();
+    };
+
+    auto getUpper = [](const AnalyzedValue &v) -> Bound {
+      if (v.getKind() == AnalyzedValue::Kind::Set) {
+        if (v.getValues().empty())
+          return Bound::constant(*v.getValues().begin());
+                
+        return Bound::constant(*v.getValues().rbegin());
+      }
+      return v.getUpper();
+    };
+
+    auto multiplyBounds = [](const Bound &x, const Bound &y) {
+      Bound l = std::min(x,y);
+      Bound h = std::max(x,y);
+
+      if (l.isMinusInfinity()) {
+        if (h.isMinusInfinity()) {        // -inf * -inf = +inf
+          return Bound::plusInfinity();
+        } else if (h.isConstant()) {
+          if (h.getConstant() < 0)        // -inf * -C = +inf
+            return Bound::plusInfinity();
+          else if (h.getConstant() == 0)  // -inf * 0 = 0
+            return Bound::constant(0);
+          else                            // -inf * +C = -inf
+            return Bound::minusInfinity();
+        } else {                          // -inf * +inf = -inf
+          return Bound::minusInfinity();
+        }
+      } else if (l.isConstant()) {
+        if (h.isConstant()) {             // C * C
+          return Bound::constant(
+            l.getConstant() * h.getConstant()
+          );
+        } else {
+          if (l.getConstant() < 0)        // -C * +inf = -inf
+            return Bound::minusInfinity();
+          else if (l.getConstant() == 0)  // 0 * +inf = 0
+            return Bound::constant(0);
+          else                            // C * +inf = +inf
+            return Bound::plusInfinity();
+        }
+      } else {                            // +inf * +inf = +inf
+        return Bound::plusInfinity();
+      }
+    };
+
+    Bound l1 = getLower(lhs);
+    Bound l2 = getLower(rhs);
+    Bound u1 = getUpper(lhs);
+    Bound u2 = getUpper(rhs);
+
+    Bound p1 = multiplyBounds(l1,l2);
+    Bound p2 = multiplyBounds(l1,u2);
+    Bound p3 = multiplyBounds(u1,l2);
+    Bound p4 = multiplyBounds(u1,u2);
+
+    Bound min = std::min({p1, p2, p3, p4});
+    Bound max = std::max({p1, p2, p3, p4});
+
+    result.setAsInterval(min,max,1); // FIXME: Interval stride
+}
+
+  A[this->def] = result;
+  return old != result;
+}
+
+bool LinearConstraint::eval(AbstractState &A)
+{
+  AnalyzedValue old = A[this->def];
+  AnalyzedValue src = A[this->operand];
+
+  AnalyzedValue result;
+
+  if(src.getKind() == AnalyzedValue::Kind::Set)
+  {
+    std::vector<int> consts;
+    for (int v : src.getValues()) {
+      consts.emplace_back((a * v) + b);
+    }
+    result.addConstant(consts);
+  }else{
+    Bound srcLower = src.getLower();
+    Bound srcUpper = src.getUpper();
+    
+    Bound lower, upper;
+    
+    if (this->a == 0)
+        result.setAsInterval(Bound::constant(b), Bound::constant(b), src.getStride());
+    else if (srcLower.isConstant() && srcUpper.isConstant()) {
+      int k1 = (this->a * srcLower.getConstant() + this->b);
+      int ku = (this->a * srcUpper.getConstant() + this->b);
+      int min = std::min(k1,ku);
+      int max = std::max(k1,ku);
+      result.setAsInterval(Bound::constant(min), Bound::constant(max), src.getStride());
+    } else {
+      if (srcLower.isMinusInfinity() && srcUpper.isPlusInfinity()) {
+        result.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
+      } else if (srcLower.isMinusInfinity()) {
+        int k = (this->a * srcUpper.getConstant() + this->b);
+        if (this->a > 0)
+          result.setAsInterval(Bound::minusInfinity(), Bound::constant(k), 1);
+        else
+          result.setAsInterval(Bound::constant(k), Bound::plusInfinity(), 1);
+      } else {
+        int k = (this->a * srcLower.getConstant() + this->b);
+        if (this->a > 0)
+          result.setAsInterval(Bound::constant(k), Bound::plusInfinity(), 1);
+        else
+          result.setAsInterval(Bound::minusInfinity(), Bound::constant(k), 1);
+      }
+    }
+  }
+
+  A[this->def] = result;
+  return old != result;
 }

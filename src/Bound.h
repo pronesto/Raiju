@@ -34,11 +34,12 @@ private:
     return static_cast<long long>(value);
   }
 
+  Type type; /**< The type of the bound. */
+  int value; /**< The literal value if type is Type::Constant. */
+
   Bound(Type type, int value) : type(type), value(value) {}
 
 public:
-  Type type; /**< The type of the bound. */
-  int value; /**< The literal value if type is Type::Constant. */
   
   Bound() : type(Type::MinusInfinity), value(0) {}
 
@@ -52,6 +53,10 @@ public:
   constexpr int getConstant() const { 
     assert (this->isConstant() && "getConstant() requires a constant Bound");
     return value;
+  }
+
+  constexpr void setConstant(int _value) {
+    value = _value;
   }
 
   /**

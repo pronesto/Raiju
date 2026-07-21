@@ -76,8 +76,8 @@ public:
       Bound hi = oldY.getUpper();
 
       // 1. Guard 1: I[Y] is -Infinity, and e(Y) has recovered to a finite bound
-      if (oldY.getLower().type == Type::MinusInfinity &&
-          eY.getLower().type  != Type::MinusInfinity) {
+      if (oldY.getLower().isMinusInfinity() &&
+          !eY.getLower().isMinusInfinity()) {
         lo = eY.getLower();
       }
       // 3. Guard 3: e(Y) lower bound is greater (tighter) than oldY lower
@@ -87,8 +87,8 @@ public:
       }
 
       // 2. Guard 2: I[Y] is +Infinity, and e(Y) has recovered to a finite bound
-      if (oldY.getUpper().type == Type::PlusInfinity &&
-          eY.getUpper().type  != Type::PlusInfinity) {
+      if (oldY.getUpper().isPlusInfinity() &&
+          !eY.getUpper().isPlusInfinity()) {
         hi = eY.getUpper();
       }
       // 4. Guard 4: e(Y) upper bound is smaller (tighter) than oldY upper
@@ -281,6 +281,46 @@ public:
     }
 };
 
+/**
+ * @class MultiplyConstraint
+ * @brief Models abstract multiplication: v0 = v1 * v2
+ */
+class MultiplyConstraint : public ArithmeticConstraint {
+public:
+    using ArithmeticConstraint::ArithmeticConstraint;
+    bool eval(AbstractState& A) override;
+
+    friend std::ostream& operator<<(std::ostream& os, const MultiplyConstraint c) {
+        os << c.def << ": " << c.op1 << " * " << c.op2;
+        return os;
+    }
+};
+
+/**
+ * @class LinearConstraint
+ * @brief Models abstract linear equations: v0 = a * v1 + b
+ */
+class LinearConstraint : public Constraint{
+private:
+    std::string operand;
+    int a, b;
+
+public:
+    LinearConstraint(std::string dest, std::string src, int multiplier, int offset)
+    : Constraint(std::move(dest)), operand(std::move(src)), a(multiplier), b(offset) {}
+
+    bool eval(AbstractState& A) override;
+
+    std::vector<UseEdge> get_uses() const override{
+        return {{operand, EdgeType::Data}};
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const LinearConstraint c) {
+        os << c.def << ": " << c.a << " * " << c.operand << " + " << c.b;
+        return os;
+    }
+};
+
 inline std::ostream& operator<<(std::ostream& os, const std::shared_ptr<Constraint>& c) {
     if (auto ic = std::dynamic_pointer_cast<InitializationConstraint>(c)) {
         os << *ic;
@@ -290,6 +330,10 @@ inline std::ostream& operator<<(std::ostream& os, const std::shared_ptr<Constrai
         os << *ac;
     } else if (auto ic = std::dynamic_pointer_cast<IntersectionConstraint>(c)) {
         os << *ic;
+    } else if (auto mc = std::dynamic_pointer_cast<MultiplyConstraint>(c)) {
+        os << *mc;
+    } else if (auto lc = std::dynamic_pointer_cast<LinearConstraint>(c)) {
+        os << *lc;
     } else {
         os << *c.get();
     }
