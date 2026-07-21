@@ -1015,21 +1015,39 @@ TEST_CASE("Constraints - MultiplyConstraint Infinite Bounds", "[constraints][mul
     REQUIRE(state["c"].getUpper().getConstant() == 10);
   }
 
-  // SECTION("[-inf, +inf] * [0, 0] -> [0, 0]") {
-  //   // [-2, +inf] * [-5, 0] -> [-inf, 10]
-  //   AnalyzedValue a; 
-  //   a.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
+  SECTION("[-inf, +inf] * [0, 0] -> [0, 0]") {
+    // [-2, +inf] * [-5, 0] -> [-inf, 10]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::minusInfinity(), Bound::plusInfinity(), 1);
 
-  //   AnalyzedValue b;
-  //   b.setAsInterval(Bound::constant(0), Bound::constant(0), 1);
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(0), Bound::constant(0), 1);
 
-  //   state["a"] = a; 
-  //   state["b"] = b;
+    state["a"] = a; 
+    state["b"] = b;
 
-  //   MultiplyConstraint multiply("c", "a", "b"); 
-  //   multiply.eval(state);
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
     
-  //   REQUIRE(state["c"].getLower().getConstant() == 0);
-  //   REQUIRE(state["c"].getUpper().getConstant() == 0);
-  // }
+    REQUIRE(state["c"].getLower().getConstant() == 0);
+    REQUIRE(state["c"].getUpper().getConstant() == 0);
+  }
+
+  SECTION("[-inf, 0] * [0, +inf] -> [-inf, 0]") {
+    // [-2, +inf] * [-5, 0] -> [-inf, 10]
+    AnalyzedValue a; 
+    a.setAsInterval(Bound::minusInfinity(), Bound::constant(0), 1);
+
+    AnalyzedValue b;
+    b.setAsInterval(Bound::constant(0), Bound::plusInfinity(), 1);
+
+    state["a"] = a; 
+    state["b"] = b;
+
+    MultiplyConstraint multiply("c", "a", "b"); 
+    multiply.eval(state);
+    
+    REQUIRE(state["c"].getLower().isMinusInfinity());
+    REQUIRE(state["c"].getUpper().getConstant() == 0);
+  }
 }
