@@ -300,84 +300,55 @@ bool MultiplyConstraint::eval(AbstractState &A)
       return v.getUpper();
     };
 
+    auto multiplyBounds = [](const Bound &x, const Bound &y) {
+      Bound l = std::min(x,y);
+      Bound h = std::max(x,y);
+
+      if (l.isMinusInfinity()) {
+        if (h.isMinusInfinity()) {        // -inf * -inf = +inf
+          return Bound::plusInfinity();
+        } else if (h.isConstant()) {
+          if (h.getConstant() < 0)        // -inf * -C = +inf
+            return Bound::plusInfinity();
+          else if (h.getConstant() == 0)  // -inf * 0 = 0
+            return Bound::constant(0);
+          else                            // -inf * +C = -inf
+            return Bound::minusInfinity();
+        } else {                          // -inf * +inf = -inf
+          return Bound::minusInfinity();
+        }
+      } else if (l.isConstant()) {
+        if (h.isConstant()) {             // C * C
+          return Bound::constant(
+            l.getConstant() * h.getConstant()
+          );
+        } else {
+          if (l.getConstant() < 0)        // -C * +inf = -inf
+            return Bound::minusInfinity();
+          else if (l.getConstant() == 0)  // 0 * +inf = 0
+            return Bound::constant(0);
+          else                            // C * +inf = +inf
+            return Bound::plusInfinity();
+        }
+      } else {                            // +inf * +inf = +inf
+        return Bound::plusInfinity();
+      }
+    };
+
     Bound l1 = getLower(lhs);
     Bound l2 = getLower(rhs);
     Bound u1 = getUpper(lhs);
     Bound u2 = getUpper(rhs);
 
-    auto hasInfiniteBound = [](const AnalyzedValue& v) -> bool {
-      return (!v.getLower().isConstant() || !v.getUpper().isConstant());
-    };
+    Bound p1 = multiplyBounds(l1,l2);
+    Bound p2 = multiplyBounds(l1,u2);
+    Bound p3 = multiplyBounds(u1,l2);
+    Bound p4 = multiplyBounds(u1,u2);
 
-    auto solveInfinite = [](const Bound &x1, const Bound &y1, const Bound &x2, const Bound &y2) -> std::pair<Bound, Bound> {
-      // 2. Case: [-inf, +inf] * [anything other than zero] is [-inf, +inf]
-      if (x1.isMinusInfinity() && y1.isPlusInfinity()) {
-        if (x2.isConstant() && x2.getConstant() == 0 && y2.isConstant() && y2.getConstant() == 0)
-          return std::make_pair(Bound::constant(0), Bound::constant(0));
-        return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity());
-      }
+    Bound min = std::min({p1, p2, p3, p4});
+    Bound max = std::max({p1, p2, p3, p4});
 
-      // 3. Normalized flags for readability
-      bool x1_inf = x1.isMinusInfinity();
-      bool y1_inf = y1.isPlusInfinity();
-      bool x2_pos = x2.isConstant() && x2.getConstant() >= 0;
-      bool y2_neg = y2.isConstant() && y2.getConstant() <= 0;
-
-      auto inf = []() -> std::pair<Bound, Bound> { 
-        return std::make_pair(Bound::minusInfinity(), Bound::plusInfinity()); 
-      };
-
-      auto minusInfBound = [](const int product) -> std::pair<Bound, Bound> { 
-        return std::make_pair(Bound::minusInfinity(), Bound::constant(product)); 
-      };
-      
-      auto plusInfBound= [](const int product) -> std::pair<Bound, Bound> {
-        return std::make_pair(Bound::constant(product), Bound::plusInfinity()); 
-      };
-
-      // Logic based on which side the infinity is on and the sign of the multiplier [x2, y2]
-      if (x1_inf) {
-          if (y1.getConstant() > 0) { // [-inf, +]
-              if (x2_pos) return minusInfBound(y1.getConstant() * y2.getConstant());
-              if (y2_neg) return plusInfBound(y1.getConstant() * x2.getConstant());
-              return inf();
-          } else { // [-inf, -]
-              if (x2_pos) return minusInfBound(y1.getConstant() * x2.getConstant());
-              if (y2_neg) return plusInfBound(y1.getConstant() * y2.getConstant());
-              return inf();
-          }
-      } 
-      
-      if (y1_inf) {
-          if (x1.getConstant() > 0) { // [+, +inf]
-              if (x2_pos) return plusInfBound(x1.getConstant() * x2.getConstant());
-              if (y2_neg) return minusInfBound(x1.getConstant() * y2.getConstant());
-              return inf();
-          } else { // [-, +inf]
-              if (x2_pos) return plusInfBound(x1.getConstant() * y2.getConstant());
-              if (y2_neg) return minusInfBound(x1.getConstant() * x2.getConstant());
-              return inf();
-          }
-      }
-    };
-
-    if (hasInfiniteBound(lhs)) {
-      auto [newLow, newUp] = solveInfinite(l1, u1, l2, u2);
-      result.setAsInterval(newLow, newUp, 1);
-    } else if (hasInfiniteBound(rhs)) {
-      auto [newLow, newUp] = solveInfinite(l2, u2, l1, u1);
-      result.setAsInterval(newLow, newUp, 1);
-    } else {
-      int p1 = l1.getConstant() * l2.getConstant();
-      int p2 = l1.getConstant() * u2.getConstant();
-      int p3 = u1.getConstant() * l2.getConstant();
-      int p4 = u1.getConstant() * u2.getConstant();
-
-      int min = std::min({p1, p2, p3, p4});
-      int max = std::max({p1, p2, p3, p4});
-
-      result.setAsInterval(Bound::constant(min),Bound::constant(max), 1); // FIXME: Interval stride
-    }
+    result.setAsInterval(min,max,1); // FIXME: Interval stride
 }
 
   A[this->def] = result;
