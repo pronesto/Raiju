@@ -339,3 +339,18 @@ inline std::ostream& operator<<(std::ostream& os, const std::shared_ptr<Constrai
     }
     return os;
 }
+
+/**
+ * @class SubConstraint
+ * @brief Models abstract sub: v0 = v1 - v2
+ */
+class SubConstraint : public ArithmeticConstraint {
+public:
+    using ArithmeticConstraint::ArithmeticConstraint;
+    bool eval(AbstractState& A) override;
+
+    friend std::ostream& operator<<(std::ostream& os, const SubConstraint c) {
+        os << c.def << ": " << c.op1 << " + " << c.op2;
+        return os;
+    }
+};

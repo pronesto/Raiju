@@ -4,9 +4,11 @@
  */
 
 #include "Constraint.h"
+#include "AbstractValue.h"
 #include <algorithm>
 #include <cmath>
 #include <cassert>
+#include <iostream>
 
 // --- Base Constraint ---
 Constraint::Constraint(std::string name) : def(std::move(name)) {}
@@ -404,4 +406,16 @@ bool LinearConstraint::eval(AbstractState &A)
 
   A[this->def] = result;
   return old != result;
+}
+
+bool SubConstraint::eval(AbstractState& A) {
+  AnalyzedValue av;
+
+  std::vector<int> values;
+  for(int value : A[op2].getValues()) values.push_back(value*(-1));
+  av.addConstant(values);
+  A[op2] = std::move(av);
+
+  AddConstraint add(def,op1, op2);
+  return add.eval(A);
 }
