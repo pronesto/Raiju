@@ -1,51 +1,51 @@
-#include "AbstractValue.h"
+#include "IntValue.h"
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("AbstractValue - Finite Set behavior below capacity", "[lattice]") {
   // Instantiate with a capacity of N = 3
-  AbstractValue<3> val;
+  IntValue<3> val;
 
   SECTION("Starts as an empty set (Bottom element)") {
-    REQUIRE(val.getKind() == AbstractValue<3>::Kind::Set);
+    REQUIRE(val.getKind() == IntValue<3>::Kind::Set);
   }
 
   SECTION("Stays a set when adding unique constants up to N") {
     std::vector<int> vals = {3,5};
     val.addConstant(vals);
 
-    REQUIRE(val.getKind() == AbstractValue<3>::Kind::Set);
+    REQUIRE(val.getKind() == IntValue<3>::Kind::Set);
 
     // Adding a duplicate shouldn't change the size or representation
     vals = {5};
     val.addConstant(vals);
-    REQUIRE(val.getKind() == AbstractValue<3>::Kind::Set);
+    REQUIRE(val.getKind() == IntValue<3>::Kind::Set);
   }
 }
 
 TEST_CASE("AbstractValue - Collapse to Strided Interval at capacity N",
           "[lattice]") {
-  AbstractValue<3> val; // N = 3
+  IntValue<3> val; // N = 3
 
   SECTION("Collapses to StridedInterval when exceeding N constants") {
     std::vector<int> vals = {3, 5, 11};
     val.addConstant(vals);
 
     // Currently at size 3 (exactly N). Should still be a set.
-    REQUIRE(val.getKind() == AbstractValue<3>::Kind::Set);
+    REQUIRE(val.getKind() == IntValue<3>::Kind::Set);
 
     // Adding the 4th distinct element pushes it past N = 3
     vals = {13};
     val.addConstant(vals);
 
     // It must collapse into a StridedInterval representation
-    REQUIRE(val.getKind() == AbstractValue<3>::Kind::StridedInterval);
+    REQUIRE(val.getKind() == IntValue<3>::Kind::StridedInterval);
   }
 }
 
 TEST_CASE("AbstractValue - Lattice Join Operations", "[lattice]") {
   SECTION("Join of two small sets stays a set if combined size <= N") {
-    AbstractValue<4> lhs;
-    AbstractValue<4> rhs;
+    IntValue<4> lhs;
+    IntValue<4> rhs;
 
     std::vector<int> vals = {2};
     lhs.addConstant(vals);
@@ -55,12 +55,12 @@ TEST_CASE("AbstractValue - Lattice Join Operations", "[lattice]") {
     lhs.join(rhs);
 
     // Total unique elements = 2, which is <= 4
-    REQUIRE(lhs.getKind() == AbstractValue<4>::Kind::Set);
+    REQUIRE(lhs.getKind() == IntValue<4>::Kind::Set);
   }
 
   SECTION("Join of two sets collapses if combined size > N") {
-    AbstractValue<2> lhs;
-    AbstractValue<2> rhs;
+    IntValue<2> lhs;
+    IntValue<2> rhs;
 
     std::vector<int> vals = {10, 20};
     lhs.addConstant(vals); // lhs has 2 elements
@@ -70,7 +70,7 @@ TEST_CASE("AbstractValue - Lattice Join Operations", "[lattice]") {
         vals); // joining will create a set of 3 elements, exceeding N=2
 
     lhs.join(rhs);
-    REQUIRE(lhs.getKind() == AbstractValue<2>::Kind::StridedInterval);
+    REQUIRE(lhs.getKind() == IntValue<2>::Kind::StridedInterval);
   }
 }
 
@@ -104,15 +104,15 @@ TEST_CASE("AbstractValue - Bound Equality Operators", "[lattice][equality]") {
 TEST_CASE("AbstractValue - Lattice Structural Equality",
           "[lattice][equality]") {
   SECTION("Empty sets (Bottom elements) are equal") {
-    AbstractValue<3> val1;
-    AbstractValue<3> val2;
+    IntValue<3> val1;
+    IntValue<3> val2;
 
     REQUIRE(val1 == val2);
   }
 
   SECTION("Sets with identical elements are equal") {
-    AbstractValue<3> val1;
-    AbstractValue<3> val2;
+    IntValue<3> val1;
+    IntValue<3> val2;
 
     std::vector<int> vals = {10, 20};
     val1.addConstant(vals);
@@ -125,8 +125,8 @@ TEST_CASE("AbstractValue - Lattice Structural Equality",
   }
 
   SECTION("Sets with different elements are unequal") {
-    AbstractValue<3> val1;
-    AbstractValue<3> val2;
+    IntValue<3> val1;
+    IntValue<3> val2;
 
     std::vector<int> vals = {10};
     val1.addConstant(vals);
@@ -137,8 +137,8 @@ TEST_CASE("AbstractValue - Lattice Structural Equality",
   }
 
   SECTION("Set and StridedInterval are never equal") {
-    AbstractValue<2> val1; // N = 2
-    AbstractValue<2> val2;
+    IntValue<2> val1; // N = 2
+    IntValue<2> val2;
 
     // val1 stays a set of 2 elements
     
@@ -153,8 +153,8 @@ TEST_CASE("AbstractValue - Lattice Structural Equality",
   }
 
   SECTION("StridedInterval elements with matching configurations are equal") {
-    AbstractValue<2> val1;
-    AbstractValue<2> val2;
+    IntValue<2> val1;
+    IntValue<2> val2;
 
     // Force both to collapse into the exact same interval bounds and strides
     std::vector<int> vals = {5,10,15};
@@ -166,8 +166,8 @@ TEST_CASE("AbstractValue - Lattice Structural Equality",
 
   SECTION(
       "StridedInterval elements with differing strides or bounds are unequal") {
-    AbstractValue<2> val1;
-    AbstractValue<2> val2;
+    IntValue<2> val1;
+    IntValue<2> val2;
 
     // Both collapse, but will have different structural dimensions
     // (bounds/strides)
@@ -230,9 +230,9 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
           "[lattice][comparison]") {
 
   SECTION("Empty sets (bottom elements) evaluate to false for safety") {
-    AbstractValue<3> empty1;
-    AbstractValue<3> empty2;
-    AbstractValue<3> populated;
+    IntValue<3> empty1;
+    IntValue<3> empty2;
+    IntValue<3> populated;
     std::vector<int> vals = {5};
     populated.addConstant(vals);
 
@@ -245,15 +245,15 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
   }
 
   SECTION("Set vs Set sound comparisons") {
-    AbstractValue<3> set_low; // {1, 2}
+    IntValue<3> set_low; // {1, 2}
     std::vector<int> vals = {1,2};
     set_low.addConstant(vals);
 
-    AbstractValue<3> set_high; // {10, 11}
+    IntValue<3> set_high; // {10, 11}
     vals = {10,11};
     set_high.addConstant(vals);
 
-    AbstractValue<3> set_overlap; // {2, 5}
+    IntValue<3> set_overlap; // {2, 5}
     vals = {2,5};
     set_overlap.addConstant(vals);
 
@@ -271,11 +271,11 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
   }
 
   SECTION("Set vs StridedInterval mixed comparisons") {
-    AbstractValue<3> set; // {1, 2, 3}
+    IntValue<3> set; // {1, 2, 3}
     std::vector<int> vals = {1, 2, 3};
     set.addConstant(vals);
 
-    AbstractValue<3> interval; // Collapses into interval [10, 20] with stride 5
+    IntValue<3> interval; // Collapses into interval [10, 20] with stride 5
     vals = {10, 15, 20, 25};
     interval.addConstant(vals); // Forces collapse since N=3
 
@@ -285,16 +285,16 @@ TEST_CASE("AbstractValue - AbstractValue Over-Approximate Comparisons",
   }
 
   SECTION("StridedInterval vs Infinities") {
-    AbstractValue<3> interval; // [10, 20] collapsed
+    IntValue<3> interval; // [10, 20] collapsed
     std::vector<int> vals = {10, 15, 20, 25};
     interval.addConstant(vals);
 
-    AbstractValue<3> infinite_top;
+    IntValue<3> infinite_top;
     infinite_top.setAsInterval(
         Bound::constant(100),
         Bound::plusInfinity());
 
-    AbstractValue<3> infinite_bottom;
+    IntValue<3> infinite_bottom;
     infinite_bottom.setAsInterval(
         Bound::minusInfinity(),
         Bound::constant(-5));
