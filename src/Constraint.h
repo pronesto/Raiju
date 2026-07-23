@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <memory>
 #include <variant>
-#include "AbstractValue.h"
+#include "IntValue.h"
 
 enum class EdgeType{
    Data,
