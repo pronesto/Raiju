@@ -7,7 +7,7 @@
 #ifndef SOLVER_H
 #define SOLVER_H
 
-#include "AbstractValue.h"
+#include "IntValue.h"
 #include "Constraint.h"
 #include <memory>
 #include <vector>
