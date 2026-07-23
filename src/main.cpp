@@ -1,16 +1,16 @@
 #include <iostream>
-#include "AbstractValue.h"
+#include "IntValue.h"
 
 int main() {
     std::cout << "Lattice Static Analyzer Engine Initialized." << std::endl;
     
     // Quick smoke test of your template domain
-    AbstractValue<4> val;
+    IntValue<4> val;
     std::vector<int> vals = {42};
     val.addConstant(vals);
     
     std::cout << "Success! Lattice state kind: " 
-              << (val.getKind() == AbstractValue<4>::Kind::Set ?
+              << (val.getKind() == IntValue<4>::Kind::Set ?
                   "Set" : "StridedInterval")
               << std::endl;
               

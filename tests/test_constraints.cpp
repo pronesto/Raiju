@@ -1051,3 +1051,68 @@ TEST_CASE("Constraints - MultiplyConstraint Infinite Bounds", "[constraints][mul
     REQUIRE(state["c"].getUpper().getConstant() == 0);
   }
 }
+
+TEST_CASE("Constraints - SubConstraint Pairwise Sets", "[constraints][sub]") {
+  AbstractState state;
+
+  // v1 = {10, 20}
+  AnalyzedValue v1;
+  std::vector<int> vals = {10, 20};
+  v1.addConstant(vals);
+  state["v1"] = v1;
+
+  // v2 = {2, 3}
+  vals = {2, 3};
+  AnalyzedValue v2;
+  v2.addConstant(vals);
+  state["v2"] = v2;
+
+  // v0 = v1 - v2
+  SubConstraint sub_v0("v0", "v1", "v2");
+
+  SECTION("Exact pairwise subtraction for sets under capacity") {
+    bool changed = sub_v0.eval(state);
+
+    REQUIRE(changed == true);
+    REQUIRE(state["v0"].getKind() == AnalyzedValue::Kind::Set);
+
+    // Expected unique combinations: 10-2=8, 10-3=7, 20-2=18, 20-3=17
+    // Sorted: {7, 8, 17, 18} (Total size 4, which is <= N=4)
+    AnalyzedValue expected;
+    std::vector<int> expected_vals = {7, 8, 17, 18};
+    expected.addConstant(expected_vals);
+
+    REQUIRE(state["v0"] == expected);
+  }
+}
+
+TEST_CASE("Constraints - SubConstraint Overflow and Interval Math",
+          "[constraints][sub]") {
+  AbstractState state;
+
+  AnalyzedValue v1;
+  std::vector<int> vals = {10, 20, 30};
+  v1.addConstant(vals);
+  state["v1"] = v1;
+
+  AnalyzedValue v2;
+  vals = {1, 2};
+  v2.addConstant(vals);
+  state["v2"] = v2;
+
+  SubConstraint sub_v0("v0", "v1", "v2");
+
+  SECTION("Subtraction widens after the finite-set capacity is exceeded") {
+    REQUIRE(sub_v0.eval(state));
+
+    const auto &result = state["v0"];
+
+    REQUIRE(result.getKind() == AnalyzedValue::Kind::StridedInterval);
+
+    REQUIRE(result.getLower().getConstant() == 8);
+
+    REQUIRE(result.getUpper().getConstant() == 29);
+
+    REQUIRE(result.getStride() == 1);
+  }
+}

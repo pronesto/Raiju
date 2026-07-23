@@ -34,7 +34,8 @@ FetchContent_MakeAvailable(Catch2)
 
 # These are the files that we are currently testing using catch2:
 add_executable(analyzer_tests
-    tests/test_abstract_value.cpp
+    tests/test_bool_value.cpp
+    tests/test_int_value.cpp
     tests/test_constraints.cpp
     tests/test_solver.cpp
     src/Constraint.cpp
